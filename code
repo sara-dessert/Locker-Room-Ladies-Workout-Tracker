@@ -25,196 +25,260 @@
             </div>
             <div>
                 <h1 class="font-bold text-lg tracking-tight bg-gradient-to-r from-pink-400 to-purple-300 bg-clip-text text-transparent">Iron Sisters</h1>
-                <p class="text-xs text-slate-400" id="header-subtitle">Strength Tracker (Cloud Sync)</p>
+                <p class="text-xs text-slate-400" id="header-subtitle">Strength Tracker</p>
             </div>
         </div>
-        <div id="header-user-info" class="hidden flex items-center space-x-3">
-            <span id="current-user-badge" class="text-xs font-semibold px-3 py-1 bg-slate-700 text-pink-300 rounded-full border border-slate-600"></span>
-            <button onclick="app.logout()" class="text-xs text-slate-400 hover:text-white transition-colors bg-slate-700/50 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-600/50">
-                <i class="fa-solid fa-right-from-bracket mr-1"></i> Switch User
+        <div id="header-user-info" class="hidden flex items-center space-x-2">
+            <span id="current-user-badge" class="text-xs font-semibold px-2.5 py-1 bg-slate-700 text-pink-300 rounded-full border border-slate-600"></span>
+            <button id="coach-toggle-btn" onclick="app.toggleCoachMode()" class="text-xs text-amber-300 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 px-2.5 py-1 rounded-lg transition-colors font-medium">
+                <i class="fa-solid fa-crown mr-1"></i> Coach
+            </button>
+            <button onclick="app.logout()" class="text-xs text-slate-400 hover:text-white transition-colors bg-slate-700/50 hover:bg-slate-700 p-1.5 rounded-lg border border-slate-600/50" title="Switch User">
+                <i class="fa-solid fa-right-from-bracket"></i>
             </button>
         </div>
     </header>
 
     <!-- Main Content Viewport -->
     <main id="app-container" class="flex-1 overflow-y-auto p-4 max-w-md w-full mx-auto pb-20">
-        <!-- Loading State Indicator -->
-        <div id="loading-view" class="flex flex-col items-center justify-center h-64 space-y-4">
-            <div class="w-8 h-8 border-4 border-pink-500 border-t-transparent rounded-full animate-spin"></div>
-            <p class="text-xs text-slate-400">Connecting to cloud database...</p>
-        </div>
+        <!-- Dynamic content inserted via JavaScript -->
     </main>
 
-    <!-- Custom Notification Modal -->
+    <!-- Custom Modal -->
     <div id="modal-container" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
         <div id="modal-content" class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-sm w-full shadow-2xl transform transition-all">
             <!-- Modal body dynamically populated -->
         </div>
     </div>
 
-    <!-- Firebase App & Firestore Scripts -->
+    <!-- Firebase Modules -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, doc, setDoc, getDocs, onSnapshot, addDoc, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Environment Variables provided by platform
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'iron-sisters-default';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'iron-sisters-app';
+        let firebaseConfig;
+        try {
+            firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        } catch(e) {
+            console.warn("Firebase configuration non-standard or missing, falling back to local memory.");
+        }
 
-        const DEFAULT_EXERCISES = [
-            { id: 'squat', name: 'Barbell Back Squat', category: 'Lower Body', defaultUnit: 'lbs' },
-            { id: 'deadlift', name: 'Conventional Deadlift', category: 'Full Body', defaultUnit: 'lbs' },
-            { id: 'bench', name: 'Barbell Bench Press', category: 'Upper Body', defaultUnit: 'lbs' },
-            { id: 'ohp', name: 'Overhead Press', category: 'Upper Body', defaultUnit: 'lbs' },
-            { id: 'romanian_dl', name: 'Romanian Deadlift (RDL)', category: 'Lower Body', defaultUnit: 'lbs' },
-            { id: 'hip_thrust', name: 'Barbell Hip Thrust', category: 'Lower Body', defaultUnit: 'lbs' },
-            { id: 'lat_pulldown', name: 'Lat Pulldown', category: 'Upper Body', defaultUnit: 'lbs' },
-            { id: 'db_row', name: 'Dumbbell Row', category: 'Upper Body', defaultUnit: 'lbs' },
-            { id: 'goblet_squat', name: 'Goblet Squat', category: 'Lower Body', defaultUnit: 'lbs' },
-            { id: 'plank', name: 'Weighted Plank', category: 'Core', defaultUnit: 'lbs' }
+        const INITIAL_EXERCISES = [
+            { id: '1km_run', name: '1km Run', category: 'Cardio/Monostructural', defaultUnit: 'time', trackType: 'time' },
+            { id: 'abmat_situp', name: 'AbMat Sit-Up', category: 'Core', defaultUnit: 'reps', trackType: 'reps' },
+            { id: 'air_bike', name: 'Air Bike (Assault/Echo Bike)', category: 'Cardio/Monostructural', defaultUnit: 'cal/time', trackType: 'time' },
+            { id: 'arnold_press', name: 'Arnold Press', category: 'Upper Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'back_squat', name: 'Back Squat', category: 'Lower Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'bar_muscle_up', name: 'Bar Muscle-Up', category: 'Gymnastics/Core', defaultUnit: 'reps', trackType: 'reps' },
+            { id: 'barbell_bench_press', name: 'Barbell Bench Press', category: 'Upper Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'barbell_bent_over_row', name: 'Barbell Bent-Over Row', category: 'Upper Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'barbell_hip_thrust', name: 'Barbell Hip Thrust', category: 'Lower Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'box_jump', name: 'Box Jump', category: 'Plyo/Lower', defaultUnit: 'reps', trackType: 'reps' },
+            { id: 'box_jump_over', name: 'Box Jump-Over', category: 'Plyo/Lower', defaultUnit: 'reps', trackType: 'reps' },
+            { id: 'box_squat', name: 'Box Squat', category: 'Lower Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'box_step_up', name: 'Box Step-Up (Weighted or Bodyweight)', category: 'Lower Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'bulgarian_split_squat', name: 'Bulgarian Split Squat', category: 'Lower Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'burpee_broad_jump', name: 'Burpee Broad Jump', category: 'Full Body', defaultUnit: 'reps', trackType: 'reps' },
+            { id: 'c2b_pullup', name: 'Chest-to-Bar Pull-Up (C2B)', category: 'Upper Body', defaultUnit: 'reps', trackType: 'reps' },
+            { id: 'chest_to_floor_burpee', name: 'Chest-to-Floor Burpee', category: 'Full Body', defaultUnit: 'reps', trackType: 'reps' },
+            { id: 'chin_up', name: 'Chin-Up', category: 'Upper Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'clean_and_press', name: 'Clean & Press (Barbell/DB/KB)', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'concept2_bikeerg', name: 'Concept2 BikeErg', category: 'Cardio/Monostructural', defaultUnit: 'time', trackType: 'time' },
+            { id: 'concept2_row_1000m', name: 'Concept2 Row / 1000m Row', category: 'Cardio/Monostructural', defaultUnit: 'time', trackType: 'time' },
+            { id: 'concept2_skierg_1000m', name: 'Concept2 SkiErg / 1000m SkiErg', category: 'Cardio/Monostructural', defaultUnit: 'time', trackType: 'time' },
+            { id: 'conventional_deadlift', name: 'Conventional Deadlift', category: 'Lower Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'curved_manual_treadmill', name: 'Curved Manual Treadmill', category: 'Cardio/Monostructural', defaultUnit: 'time', trackType: 'time' },
+            { id: 'db_kb_bench_press', name: 'DB/KB Bench Press', category: 'Upper Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'db_kb_floor_press', name: 'DB/KB Floor Press', category: 'Upper Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'deficit_push_up', name: 'Deficit Push-Up', category: 'Upper Body', defaultUnit: 'reps', trackType: 'reps' },
+            { id: 'devils_press', name: 'Devil\'s Press (DB)', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'double_under', name: 'Double Under (Jump Rope)', category: 'Cardio/Monostructural', defaultUnit: 'reps', trackType: 'reps' },
+            { id: 'farmers_carry', name: 'Farmer\'s Carry (Dual DB/KB)', category: 'Full Body', defaultUnit: 'lbs', trackType: 'time' },
+            { id: 'front_rack_carry', name: 'Front Rack Carry (Dual or Single DB/KB)', category: 'Full Body', defaultUnit: 'lbs', trackType: 'time' },
+            { id: 'front_squat', name: 'Front Squat', category: 'Lower Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'glute_bridge', name: 'Glute Bridge', category: 'Lower Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'goblet_squat', name: 'Goblet Squat (DB/KB)', category: 'Lower Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'good_morning', name: 'Good Morning', category: 'Lower Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'hand_release_push_up', name: 'Hand-Release Push-Up', category: 'Upper Body', defaultUnit: 'reps', trackType: 'reps' },
+            { id: 'hspu', name: 'Handstand Push-Up (HSPU)', category: 'Upper Body', defaultUnit: 'reps', trackType: 'reps' },
+            { id: 'hang_clean', name: 'Hang Clean', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'hang_snatch', name: 'Hang Snatch', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'incline_bench_press', name: 'Incline Bench Press', category: 'Upper Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'inverted_row', name: 'Inverted Row', category: 'Upper Body', defaultUnit: 'reps', trackType: 'reps' },
+            { id: 'single_under', name: 'Jump Rope (Single Under)', category: 'Cardio/Monostructural', defaultUnit: 'reps', trackType: 'reps' },
+            { id: 'kipping_butterfly_pullup', name: 'Kipping / Butterfly Pull-Up', category: 'Upper Body', defaultUnit: 'reps', trackType: 'reps' },
+            { id: 'knees_to_elbows', name: 'Knees-to-Elbows', category: 'Core', defaultUnit: 'reps', trackType: 'reps' },
+            { id: 'lat_pulldown', name: 'Lat Pulldown', category: 'Upper Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'med_ball_slam', name: 'Medicine Ball Slam', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'overhead_carry', name: 'Overhead Carry (Dual or Single DB/KB)', category: 'Full Body', defaultUnit: 'lbs', trackType: 'time' },
+            { id: 'overhead_squat', name: 'Overhead Squat', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'pendlay_row', name: 'Pendlay Row', category: 'Upper Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'plank', name: 'Plank', category: 'Core', defaultUnit: 'time', trackType: 'time' },
+            { id: 'power_clean', name: 'Power Clean (Barbell/DB/KB/Sandbag)', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'power_snatch', name: 'Power Snatch (Barbell/DB/KB)', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'push_jerk_split_jerk', name: 'Push Jerk / Split Jerk', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'push_press', name: 'Push Press (Barbell/DB/KB)', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'renegade_row', name: 'Renegade Row (DB/KB)', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'reverse_lunge', name: 'Reverse Lunge (Barbell/DB/KB/Sandbag)', category: 'Lower Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'ring_muscle_up', name: 'Ring Muscle-Up', category: 'Gymnastics/Core', defaultUnit: 'reps', trackType: 'reps' },
+            { id: 'ring_row', name: 'Ring Row', category: 'Upper Body', defaultUnit: 'reps', trackType: 'reps' },
+            { id: 'rdl', name: 'Romanian Deadlift / RDL (Barbell/DB/KB)', category: 'Lower Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'russian_twist', name: 'Russian Twist (Weighted)', category: 'Core', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'sandbag_clean', name: 'Sandbag Clean', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'sandbag_shoulder_toss', name: 'Sandbag Over-the-Shoulder Toss', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'sandbag_walking_lunge', name: 'Sandbag Walking Lunge', category: 'Lower Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'single_arm_row', name: 'Single-Arm Row (DB/KB)', category: 'Upper Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'sled_pull', name: 'Sled Pull', category: 'Full Body', defaultUnit: 'lbs', trackType: 'time' },
+            { id: 'sled_push', name: 'Sled Push', category: 'Full Body', defaultUnit: 'lbs', trackType: 'time' },
+            { id: 'squat_clean', name: 'Squat Clean', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'squat_snatch', name: 'Squat Snatch', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'standard_push_up', name: 'Standard Push-Up', category: 'Upper Body', defaultUnit: 'reps', trackType: 'reps' },
+            { id: 'stiff_legged_deadlift', name: 'Stiff-Legged Deadlift', category: 'Lower Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'strict_pull_up', name: 'Strict Pull-Up', category: 'Upper Body', defaultUnit: 'reps', trackType: 'reps' },
+            { id: 'strict_shoulder_press', name: 'Strict Shoulder Press (Barbell/DB/KB)', category: 'Upper Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'suitcase_carry', name: 'Suitcase Carry (Single DB/KB)', category: 'Full Body', defaultUnit: 'lbs', trackType: 'time' },
+            { id: 'sumo_deadlift', name: 'Sumo Deadlift', category: 'Lower Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'sdhp', name: 'Sumo Deadlift High Pull / SDHP (Barbell/KB)', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'swing_db_kb', name: 'Swing (DB/KB - Russian & American)', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'thruster', name: 'Thruster (Barbell/DB/KB)', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 't2b', name: 'Toes-to-Bar (T2B)', category: 'Core', defaultUnit: 'reps', trackType: 'reps' },
+            { id: 'turkish_get_up', name: 'Turkish Get-Up (DB/KB)', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'v_ups', name: 'V-Ups', category: 'Core', defaultUnit: 'reps', trackType: 'reps' },
+            { id: 'walking_lunge', name: 'Walking Lunge (Barbell/DB/KB)', category: 'Lower Body', defaultUnit: 'lbs', trackType: 'reps' },
+            { id: 'wall_balls', name: 'Wall Balls', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' }
         ];
 
         class App {
             constructor() {
+                this.db = null;
+                this.auth = null;
+                this.user = null;
+                this.isCoachMode = false;
+
                 this.state = {
                     users: [
-                        { id: 'sarah', name: 'Sarah M.', joined: '2026-01-10' },
-                        { id: 'jess', name: 'Jess K.', joined: '2026-01-12' },
-                        { id: 'amanda', name: 'Amanda R.', joined: '2026-01-15' },
-                        { id: 'elena', name: 'Elena T.', joined: '2026-02-01' }
+                        { id: 'sarah', name: 'Sarah M.', joined: '2026-01-10', pin: '' },
+                        { id: 'jess', name: 'Jess K.', joined: '2026-01-12', pin: '' },
+                        { id: 'amanda', name: 'Amanda R.', joined: '2026-01-15', pin: '' },
+                        { id: 'elena', name: 'Elena T.', joined: '2026-02-01', pin: '' }
                     ],
-                    exercises: [...DEFAULT_EXERCISES],
+                    exercises: [...INITIAL_EXERCISES],
                     logs: [],
-                    measurements: []
+                    measurements: [],
+                    assignedWorkout: { date: '', exerciseIds: [], note: '' }
                 };
+
                 this.currentUser = null;
                 this.currentView = 'welcome';
                 this.selectedExerciseId = null;
-                this.db = null;
-                this.auth = null;
-                this.userId = null;
-                this.isInitialized = false;
 
                 this.initFirebase();
             }
 
             async initFirebase() {
-                try {
-                    if (!firebaseConfig) {
-                        console.warn("Firebase config not found. Running in offline fallback mode.");
-                        this.isInitialized = true;
+                if (firebaseConfig) {
+                    try {
+                        const app = initializeApp(firebaseConfig);
+                        this.auth = getAuth(app);
+                        this.db = getFirestore(app);
+
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            await signInWithCustomToken(this.auth, __initial_auth_token);
+                        } else {
+                            await signInAnonymously(this.auth);
+                        }
+
+                        onAuthStateChanged(this.auth, (u) => {
+                            if (u) {
+                                this.user = u;
+                                this.setupRealtimeListeners();
+                            }
+                        });
+                    } catch (e) {
+                        console.error("Firestore initialization error, running in offline mode:", e);
+                        this.loadLocalState();
+                    }
+                } else {
+                    this.loadLocalState();
+                }
+                this.render();
+            }
+
+            loadLocalState() {
+                const saved = localStorage.getItem('iron_sisters_data');
+                if (saved) {
+                    try { 
+                        const parsed = JSON.parse(saved);
+                        this.state = { ...this.state, ...parsed }; 
+                        if (!parsed.exercises || parsed.exercises.length < INITIAL_EXERCISES.length) {
+                            this.state.exercises = INITIAL_EXERCISES;
+                        }
+                    } catch(e){}
+                }
+            }
+
+            saveLocalState() {
+                localStorage.setItem('iron_sisters_data', JSON.stringify(this.state));
+            }
+
+            setupRealtimeListeners() {
+                if (!this.db) return;
+
+                const publicDocRef = doc(this.db, 'artifacts', appId, 'public', 'data', 'app_state');
+                onSnapshot(publicDocRef, (snapshot) => {
+                    if (snapshot.exists()) {
+                        const data = snapshot.data();
+                        this.state.logs = data.logs || [];
+                        this.state.exercises = (data.exercises && data.exercises.length >= INITIAL_EXERCISES.length) ? data.exercises : INITIAL_EXERCISES;
+                        this.state.users = data.users || this.state.users;
+                        this.state.measurements = data.measurements || [];
+                        this.state.assignedWorkout = data.assignedWorkout || { date: '', exerciseIds: [], note: '' };
                         this.render();
-                        return;
-                    }
-
-                    const app = initializeApp(firebaseConfig);
-                    this.db = getFirestore(app);
-                    this.auth = getAuth(app);
-
-                    // Authentication rule: Custom token first, then anonymous
-                    if (initialAuthToken) {
-                        await signInWithCustomToken(this.auth, initialAuthToken);
                     } else {
-                        await signInAnonymously(this.auth);
+                        setDoc(publicDocRef, {
+                            logs: [],
+                            exercises: INITIAL_EXERCISES,
+                            users: this.state.users,
+                            measurements: [],
+                            assignedWorkout: { date: '', exerciseIds: [], note: '' }
+                        }, { merge: true });
                     }
+                }, (err) => console.error("Firestore sync error:", err));
+            }
 
-                    this.userId = this.auth.currentUser?.uid || crypto.randomUUID();
-                    
-                    // Setup real-time Firestore listeners
-                    this.setupCloudSync();
-                } catch (e) {
-                    console.error("Firebase init error:", e);
-                    this.isInitialized = true;
-                    this.render();
+            async syncToFirestore() {
+                if (!this.db || !this.user) {
+                    this.saveLocalState();
+                    return;
                 }
-            }
-
-            setupCloudSync() {
-                // Public data collection path per RULE 1
-                const dataCollectionRef = collection(this.db, 'artifacts', appId, 'public', 'data');
-
-                // Real-time listener for logs
-                onSnapshot(collection(this.db, 'artifacts', appId, 'public', 'data', 'logs', 'items'), (snapshot) => {
-                    const loadedLogs = [];
-                    snapshot.forEach(docSnap => loadedLogs.push(docSnap.data()));
-                    if (loadedLogs.length > 0 || snapshot.size > 0) {
-                        this.state.logs = loadedLogs.sort((a, b) => new Date(b.date) - new Date(a.date));
-                    }
-                    this.checkReady();
-                }, (error) => {
-                    console.error("Logs sync error:", error);
-                    this.checkReady();
-                });
-
-                // Real-time listener for users / custom users
-                onSnapshot(collection(this.db, 'artifacts', appId, 'public', 'data', 'users', 'items'), (snapshot) => {
-                    const loadedUsers = [...DEFAULT_EXERCISES]; // placeholder check
-                    let customUsers = [];
-                    snapshot.forEach(docSnap => customUsers.push(docSnap.data()));
-                    if (customUsers.length > 0) {
-                        // Merge default users with custom users
-                        const defaults = [
-                            { id: 'sarah', name: 'Sarah M.', joined: '2026-01-10' },
-                            { id: 'jess', name: 'Jess K.', joined: '2026-01-12' },
-                            { id: 'amanda', name: 'Amanda R.', joined: '2026-01-15' },
-                            { id: 'elena', name: 'Elena T.', joined: '2026-02-01' }
-                        ];
-                        const map = new Map();
-                        [...defaults, ...customUsers].forEach(u => map.set(u.id, u));
-                        this.state.users = Array.from(map.values());
-                    }
-                }, (err) => console.log(err));
-
-                // Real-time listener for measurements
-                onSnapshot(collection(this.db, 'artifacts', appId, 'public', 'data', 'measurements', 'items'), (snapshot) => {
-                    const loadedMeas = [];
-                    snapshot.forEach(docSnap => loadedMeas.push(docSnap.data()));
-                    if (loadedMeas.length > 0) {
-                        this.state.measurements = loadedMeas.sort((a, b) => new Date(b.date) - new Date(a.date));
-                    }
-                }, (err) => console.log(err));
-            }
-
-            checkReady() {
-                if (!this.isInitialized) {
-                    this.isInitialized = true;
-                    this.render();
-                } else if (this.currentView !== 'exercise_detail') {
-                    // Soft re-render if data updates in background
-                    this.render();
-                }
-            }
-
-            async saveLogToCloud(entry) {
-                if (!this.db) return;
+                const publicDocRef = doc(this.db, 'artifacts', appId, 'public', 'data', 'app_state');
                 try {
-                    const docRef = doc(this.db, 'artifacts', appId, 'public', 'data', 'logs', 'items', entry.id);
-                    await setDoc(docRef, entry);
-                } catch (e) {
-                    console.error("Error saving log:", e);
+                    await setDoc(publicDocRef, {
+                        logs: this.state.logs,
+                        exercises: this.state.exercises,
+                        users: this.state.users,
+                        measurements: this.state.measurements,
+                        assignedWorkout: this.state.assignedWorkout
+                    }, { merge: true });
+                } catch(e) {
+                    console.error("Error saving data to cloud:", e);
                 }
             }
 
-            async saveUserToCloud(user) {
-                if (!this.db) return;
-                try {
-                    const docRef = doc(this.db, 'artifacts', appId, 'public', 'data', 'users', 'items', user.id);
-                    await setDoc(docRef, user);
-                } catch (e) {
-                    console.error("Error saving user:", e);
+            toggleCoachMode() {
+                this.isCoachMode = !this.isCoachMode;
+                const btn = document.getElementById('coach-toggle-btn');
+                if (this.isCoachMode) {
+                    btn.classList.add('bg-amber-500', 'text-slate-900', 'font-bold');
+                    btn.classList.remove('bg-amber-500/20', 'text-amber-300');
+                    this.showModal('Coach Mode Active 👑', 'You can now push workouts, add custom exercises, and monitor group activity.');
+                } else {
+                    btn.classList.remove('bg-amber-500', 'text-slate-900', 'font-bold');
+                    btn.classList.add('bg-amber-500/20', 'text-amber-300');
                 }
-            }
-
-            async saveMeasurementToCloud(entry) {
-                if (!this.db) return;
-                try {
-                    const docRef = doc(this.db, 'artifacts', appId, 'public', 'data', 'measurements', 'items', entry.id);
-                    await setDoc(docRef, entry);
-                } catch (e) {
-                    console.error("Error saving measurements:", e);
-                }
+                this.render();
             }
 
             navigate(view, param = null) {
@@ -232,6 +296,58 @@
                 }
             }
 
+            promptUserLogin(userId) {
+                const targetUser = this.state.users.find(u => u.id === userId);
+                if (!targetUser) return;
+
+                if (targetUser.pin) {
+                    this.showPinModal(targetUser);
+                } else {
+                    this.login(targetUser.id);
+                }
+            }
+
+            showPinModal(targetUser) {
+                const modal = document.getElementById('modal-container');
+                const content = document.getElementById('modal-content');
+                content.innerHTML = `
+                    <h3 class="text-lg font-bold text-white mb-1"><i class="fa-solid fa-lock text-pink-400 mr-2"></i>Enter Security PIN</h3>
+                    <p class="text-slate-400 text-xs mb-4">Profile locked for <b>${targetUser.name}</b></p>
+                    <form onsubmit="event.preventDefault(); app.verifyPin('${targetUser.id}', this.pinInput.value);">
+                        <input type="password" maxlength="4" name="pinInput" placeholder="4-digit PIN" autofocus required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-center text-xl tracking-widest text-white mb-4 focus:outline-none focus:border-pink-500">
+                        <div class="flex space-x-2">
+                            <button type="button" onclick="app.closeModal()" class="flex-1 bg-slate-700 text-slate-300 font-semibold py-2.5 rounded-xl text-sm">Cancel</button>
+                            <button type="submit" class="flex-1 bg-gradient-to-r from-pink-500 to-purple-600 text-white font-semibold py-2.5 rounded-xl text-sm shadow-lg shadow-pink-500/20">Unlock</button>
+                        </div>
+                    </form>
+                `;
+                modal.classList.remove('hidden');
+            }
+
+            verifyPin(userId, enteredPin) {
+                const targetUser = this.state.users.find(u => u.id === userId);
+                if (targetUser && targetUser.pin === enteredPin) {
+                    this.closeModal();
+                    this.login(userId);
+                } else {
+                    this.showModal('Incorrect PIN 🔒', 'The PIN entered is incorrect. Please try again.');
+                }
+            }
+
+            setUserPin(newPin) {
+                if (newPin.length > 0 && newPin.length !== 4) {
+                    this.showModal('Invalid PIN', 'PIN must be exactly 4 digits (or leave blank to disable).');
+                    return;
+                }
+                const u = this.state.users.find(usr => usr.id === this.currentUser.id);
+                if (u) {
+                    u.pin = newPin;
+                    this.currentUser.pin = newPin;
+                    this.syncToFirestore();
+                    this.showModal('Security Updated 🔒', newPin ? '4-digit PIN lock activated for your profile.' : 'PIN protection removed.');
+                }
+            }
+
             login(userId) {
                 this.currentUser = this.state.users.find(u => u.id === userId);
                 document.getElementById('header-user-info').classList.remove('hidden');
@@ -241,48 +357,83 @@
 
             logout() {
                 this.currentUser = null;
+                this.isCoachMode = false;
                 document.getElementById('header-user-info').classList.add('hidden');
-                document.getElementById('header-subtitle').innerText = 'Strength Tracker (Cloud Sync)';
+                document.getElementById('header-subtitle').innerText = 'Strength Tracker';
                 this.navigate('welcome');
             }
 
-            addNewUser(name) {
+            addNewUser(name, pin = '') {
                 if (!name.trim()) return;
                 const newId = name.toLowerCase().replace(/[^a-z0-9]/g, '_') + '_' + Math.floor(Math.random() * 1000);
-                const newUser = { id: newId, name: name.trim(), joined: new Date().toISOString().split('T')[0] };
+                const newUser = { id: newId, name: name.trim(), joined: new Date().toISOString().split('T')[0], pin: pin };
                 this.state.users.push(newUser);
-                this.saveUserToCloud(newUser);
+                this.syncToFirestore();
                 this.login(newId);
             }
 
-            addNewExercise(name, category, unit) {
+            addNewExercise(name, category, trackType, unit) {
                 if (!name.trim()) return;
                 const newId = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
                 if (this.state.exercises.some(e => e.id === newId)) {
                     this.showModal('Notice', 'An exercise with this name already exists.');
                     return;
                 }
-                this.state.exercises.push({ id: newId, name: name.trim(), category: category, defaultUnit: unit });
+                this.state.exercises.push({ id: newId, name: name.trim(), category: category, trackType: trackType, defaultUnit: unit });
+                this.syncToFirestore();
+                this.showModal('Exercise Added! 💪', `"${name.trim()}" is now available for everyone in the group.`);
                 this.navigate('dashboard');
             }
 
-            logWorkout(exerciseId, weight, reps, notes) {
-                if (weight === '' || reps === '') {
-                    this.showModal('Missing Info', 'Please enter both weight and reps.');
+            logWorkout(exerciseId, weight, performanceValue, notes) {
+                if (performanceValue === '') {
+                    this.showModal('Missing Info', 'Please enter your reps or time completed.');
                     return;
                 }
+
+                const userLogs = this.state.logs.filter(l => l.userId === this.currentUser.id && l.exerciseId === exerciseId);
+                const ex = this.state.exercises.find(e => e.id === exerciseId);
+                
+                const numWeight = weight ? parseFloat(weight) : 0;
+                const previousMaxWeight = userLogs.length > 0 ? Math.max(...userLogs.map(l => l.weight || 0)) : 0;
+                const isPR = (previousMaxWeight > 0 && numWeight > previousMaxWeight) || (previousMaxWeight === 0 && numWeight > 0 && userLogs.length > 0);
+
                 const entry = {
-                    id: 'log_' + Date.now() + '_' + Math.floor(Math.random()*1000),
+                    id: 'log_' + Date.now(),
                     userId: this.currentUser.id,
                     exerciseId: exerciseId,
-                    weight: parseFloat(weight),
-                    reps: parseInt(reps),
+                    weight: numWeight,
+                    performanceValue: performanceValue,
                     date: new Date().toISOString().split('T')[0],
-                    notes: notes || ''
+                    notes: notes || '',
+                    isPR: isPR
                 };
+
                 this.state.logs.unshift(entry);
-                this.saveLogToCloud(entry);
-                this.showModal('Success! 💪', 'Workout logged & synced to cloud!', true);
+                this.syncToFirestore();
+                
+                if (isPR) {
+                    this.showModal('NEW PERSONAL RECORD! 🎉🏆', `Amazing job! You smashed your previous best weight!`);
+                } else {
+                    this.showModal('Success! 💪', 'Workout logged successfully!', true);
+                }
+                this.render();
+            }
+
+            pushWorkout(selectedIds, note) {
+                this.state.assignedWorkout = {
+                    date: new Date().toISOString().split('T')[0],
+                    exerciseIds: selectedIds,
+                    note: note || ''
+                };
+                this.syncToFirestore();
+                this.showModal('Workout Pushed! 🚀', 'This workout is now pinned to top for all participants.');
+                this.navigate('dashboard');
+            }
+
+            clearAssignedWorkout() {
+                this.state.assignedWorkout = { date: '', exerciseIds: [], note: '' };
+                this.syncToFirestore();
                 this.render();
             }
 
@@ -298,9 +449,15 @@
                     arms: arms ? parseFloat(arms) : null
                 };
                 this.state.measurements.unshift(entry);
-                this.saveMeasurementToCloud(entry);
+                this.syncToFirestore();
                 this.showModal('Success! 📊', 'Body measurements recorded!', true);
                 this.navigate('dashboard');
+            }
+
+            calculatePersonalRecord(userId, exerciseId) {
+                const userLogs = this.state.logs.filter(l => l.userId === userId && l.exerciseId === exerciseId);
+                if (userLogs.length === 0) return null;
+                return userLogs.reduce((max, log) => (log.weight || 0) > (max.weight || 0) ? log : max, userLogs[0]);
             }
 
             showModal(title, message, autoClose = false) {
@@ -325,11 +482,14 @@
                 const container = document.getElementById('app-container');
                 
                 if (this.currentView === 'welcome') {
-                    document.getElementById('header-subtitle').innerText = 'Strength Tracker (Cloud Sync)';
+                    document.getElementById('header-subtitle').innerText = 'Strength Tracker';
                     container.innerHTML = this.renderWelcomeView();
                 } else if (this.currentView === 'dashboard') {
                     document.getElementById('header-subtitle').innerText = 'Workout Hub';
                     container.innerHTML = this.renderDashboardView();
+                } else if (this.currentView === 'coach_push') {
+                    document.getElementById('header-subtitle').innerText = 'Coach Builder';
+                    container.innerHTML = this.renderCoachPushView();
                 } else if (this.currentView === 'exercise_detail') {
                     document.getElementById('header-subtitle').innerText = 'Progress Chart';
                     container.innerHTML = this.renderExerciseDetailView();
@@ -340,18 +500,27 @@
                 } else if (this.currentView === 'add_exercise') {
                     document.getElementById('header-subtitle').innerText = 'New Exercise';
                     container.innerHTML = this.renderAddExerciseView();
+                } else if (this.currentView === 'security') {
+                    document.getElementById('header-subtitle').innerText = 'Profile Security';
+                    container.innerHTML = this.renderSecurityView();
+                } else if (this.currentView === 'group_summary') {
+                    document.getElementById('header-subtitle').innerText = 'Group Progress';
+                    container.innerHTML = this.renderGroupSummaryView();
                 }
             }
 
             renderWelcomeView() {
                 let usersHtml = this.state.users.map(u => `
-                    <button onclick="app.login('${u.id}')" class="w-full text-left bg-slate-800 hover:bg-slate-755 border border-slate-700/80 hover:border-pink-500/50 p-4 rounded-2xl flex items-center justify-between group transition-all shadow-sm hover:shadow-pink-500/10">
+                    <button onclick="app.promptUserLogin('${u.id}')" class="w-full text-left bg-slate-800 hover:bg-slate-750 border border-slate-700/80 hover:border-pink-500/50 p-4 rounded-2xl flex items-center justify-between group transition-all shadow-sm hover:shadow-pink-500/10">
                         <div class="flex items-center space-x-3">
                             <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-pink-500/20 to-purple-500/20 border border-pink-500/30 flex items-center justify-center text-pink-400 font-bold group-hover:scale-105 transition-transform">
                                 ${u.name.charAt(0)}
                             </div>
                             <div>
-                                <span class="font-semibold text-white block group-hover:text-pink-300 transition-colors">${u.name}</span>
+                                <div class="flex items-center space-x-1.5">
+                                    <span class="font-semibold text-white block group-hover:text-pink-300 transition-colors">${u.name}</span>
+                                    ${u.pin ? `<i class="fa-solid fa-lock text-[10px] text-amber-400" title="PIN Protected"></i>` : ''}
+                                </div>
                                 <span class="text-xs text-slate-400">Member since ${u.joined}</span>
                             </div>
                         </div>
@@ -366,7 +535,7 @@
                                 <i class="fa-solid fa-fire-flame-curved text-2xl"></i>
                             </div>
                             <h2 class="text-2xl font-bold tracking-tight">Who is lifting today?</h2>
-                            <p class="text-sm text-slate-400">Select your name to sync your lifts with the group in real-time.</p>
+                            <p class="text-sm text-slate-400">Select your profile to start logging your weights.</p>
                         </div>
                         
                         <div class="space-y-3">
@@ -374,13 +543,16 @@
                         </div>
 
                         <div class="pt-4 border-t border-slate-800">
-                            <form onsubmit="event.preventDefault(); app.addNewUser(this.newUserName.value);" class="space-y-3">
-                                <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">Not on the list?</label>
-                                <div class="flex space-x-2">
-                                    <input type="text" name="newUserName" placeholder="Enter your name..." required class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-pink-500 transition-colors">
-                                    <button type="submit" class="bg-gradient-to-r from-pink-500 to-purple-600 text-white px-5 rounded-xl text-sm font-semibold shadow-lg shadow-pink-500/20 hover:opacity-90 transition-opacity">
-                                        Join
-                                    </button>
+                            <form onsubmit="event.preventDefault(); app.addNewUser(this.newUserName.value, this.newUserPin.value);" class="space-y-3">
+                                <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">New Participant</label>
+                                <div class="space-y-2">
+                                    <input type="text" name="newUserName" placeholder="Enter your name..." required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-pink-500">
+                                    <div class="flex space-x-2">
+                                        <input type="password" maxlength="4" name="newUserPin" placeholder="4-Digit PIN (Optional)" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-pink-500">
+                                        <button type="submit" class="bg-gradient-to-r from-pink-500 to-purple-600 text-white px-5 rounded-xl text-sm font-semibold shadow-lg shadow-pink-500/20 hover:opacity-90 transition-opacity whitespace-nowrap">
+                                            Join Group
+                                        </button>
+                                    </div>
                                 </div>
                             </form>
                         </div>
@@ -390,39 +562,68 @@
 
             renderDashboardView() {
                 let userLogs = this.state.logs.filter(l => l.userId === this.currentUser.id);
-                
-                let exercisesHtml = this.state.exercises.map(ex => {
+                const assigned = this.state.assignedWorkout;
+                const isAssignedActive = assigned && assigned.exerciseIds && assigned.exerciseIds.length > 0;
+
+                let sortedExercises = [...this.state.exercises].sort((a, b) => {
+                    const aAssigned = isAssignedActive && assigned.exerciseIds.includes(a.id);
+                    const bAssigned = isAssignedActive && assigned.exerciseIds.includes(b.id);
+                    if (aAssigned && !bAssigned) return -1;
+                    if (!aAssigned && bAssigned) return 1;
+                    return a.name.localeCompare(b.name);
+                });
+
+                let exercisesHtml = sortedExercises.map(ex => {
                     const lastLog = userLogs.find(l => l.exerciseId === ex.id);
-                    const lastText = lastLog ? `Last: ${lastLog.weight} ${ex.defaultUnit} × ${lastLog.reps} reps (${lastLog.date})` : 'No logs yet';
+                    const isTodayFocus = isAssignedActive && assigned.exerciseIds.includes(ex.id);
+                    const pr = this.calculatePersonalRecord(this.currentUser.id, ex.id);
+                    const isTimeTracked = ex.trackType === 'time';
 
                     return `
-                        <div class="bg-slate-800 border border-slate-700/80 rounded-2xl p-4 space-y-3 shadow-sm hover:border-slate-600 transition-all">
+                        <div class="bg-slate-800 border ${isTodayFocus ? 'border-pink-500/60 ring-1 ring-pink-500/30' : 'border-slate-700/80'} rounded-2xl p-4 space-y-3 shadow-sm hover:border-slate-600 transition-all">
                             <div class="flex items-center justify-between">
                                 <div class="cursor-pointer flex-1" onclick="app.navigate('exercise_detail', '${ex.id}')">
-                                    <span class="text-xs font-semibold text-pink-400 uppercase tracking-wider">${ex.category}</span>
+                                    <div class="flex items-center space-x-2">
+                                        <span class="text-xs font-semibold text-pink-400 uppercase tracking-wider">${ex.category}</span>
+                                        <span class="text-[10px] bg-slate-700 text-slate-300 font-medium px-2 py-0.5 rounded-full uppercase">${isTimeTracked ? 'Time Based' : 'Reps Based'}</span>
+                                        ${isTodayFocus ? `<span class="bg-gradient-to-r from-pink-500 to-purple-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">Today's Focus</span>` : ''}
+                                    </div>
                                     <h3 class="font-bold text-white text-base hover:text-pink-300 transition-colors flex items-center">
                                         ${ex.name} <i class="fa-solid fa-chart-line ml-2 text-xs text-slate-400"></i>
                                     </h3>
-                                    <p class="text-xs text-slate-400 mt-0.5">${lastText}</p>
+                                    
+                                    <!-- LAST WEIGHT & PR DISPLAY -->
+                                    <div class="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                                        <div class="flex items-center space-x-1">
+                                            <i class="fa-solid fa-clock-rotate-left text-amber-400"></i>
+                                            <span class="text-slate-300 font-medium">Last:</span>
+                                            ${lastLog ? `<span class="text-pink-300 font-bold bg-pink-500/10 px-2 py-0.5 rounded-md border border-pink-500/20">${lastLog.weight ? lastLog.weight + ' lbs × ' : ''}${lastLog.performanceValue || lastLog.reps || ''}</span>` : `<span class="text-slate-500 italic">None logged</span>`}
+                                        </div>
+                                        ${pr && pr.weight ? `
+                                            <div class="flex items-center space-x-1 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md text-amber-300 font-bold text-[11px]">
+                                                <i class="fa-solid fa-trophy text-amber-400 mr-0.5"></i> PR: ${pr.weight} lbs
+                                            </div>
+                                        ` : ''}
+                                    </div>
                                 </div>
                             </div>
                             
                             <!-- Quick Log Form -->
-                            <form onsubmit="event.preventDefault(); app.logWorkout('${ex.id}', this.weight.value, this.reps.value, this.notes.value);" class="bg-slate-900/60 p-3 rounded-xl border border-slate-700/50 space-y-3">
+                            <form onsubmit="event.preventDefault(); app.logWorkout('${ex.id}', this.weight ? this.weight.value : '', this.perf.value, this.notes.value);" class="bg-slate-900/60 p-3 rounded-xl border border-slate-700/50 space-y-3">
                                 <div class="grid grid-cols-2 gap-2">
                                     <div>
-                                        <label class="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Weight (${ex.defaultUnit})</label>
-                                        <input type="number" step="0.5" name="weight" placeholder="0" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-pink-500">
+                                        <label class="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Weight (lbs/kg)</label>
+                                        <input type="number" step="0.5" name="weight" placeholder="${lastLog && lastLog.weight ? lastLog.weight : '0'}" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-pink-500">
                                     </div>
                                     <div>
-                                        <label class="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Reps</label>
-                                        <input type="number" name="reps" placeholder="0" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-pink-500">
+                                        <label class="block text-[10px] font-semibold text-slate-400 uppercase mb-1">${isTimeTracked ? 'Time (min:sec or sec)' : 'Reps'}</label>
+                                        <input type="text" name="perf" placeholder="${isTimeTracked ? 'e.g. 1:30 or 90s' : (lastLog ? lastLog.performanceValue || lastLog.reps : '0')}" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-pink-500">
                                     </div>
                                 </div>
                                 <div class="flex items-center space-x-2">
-                                    <input type="text" name="notes" placeholder="Optional notes (e.g. felt easy)" class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-pink-500">
+                                    <input type="text" name="notes" placeholder="Optional notes..." class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-pink-500">
                                     <button type="submit" class="bg-pink-500 hover:bg-pink-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold shadow-md shadow-pink-500/20 transition-all flex items-center">
-                                        <i class="fa-solid fa-check mr-1.5"></i> Log
+                                        <i class="fa-solid fa-check mr-1.5"></i> Record
                                     </button>
                                 </div>
                             </form>
@@ -431,27 +632,118 @@
                 }).join('');
 
                 return `
-                    <div class="space-y-6">
-                        <div class="bg-gradient-to-tr from-slate-800 to-slate-800/80 border border-slate-700 rounded-2xl p-4 flex items-center justify-between shadow-md">
-                            <div>
-                                <span class="text-xs text-slate-400 block">Ready to crush it?</span>
-                                <h2 class="text-lg font-bold text-white">Let's lift, ${this.currentUser.name}</h2>
+                    <div class="space-y-5">
+                        <!-- Welcome & Quick Menu Grid -->
+                        <div class="bg-gradient-to-tr from-slate-800 to-slate-800/80 border border-slate-700 rounded-2xl p-4 shadow-md">
+                            <div class="flex items-center justify-between mb-3">
+                                <div>
+                                    <span class="text-xs text-slate-400 block">Session Dashboard</span>
+                                    <h2 class="text-lg font-bold text-white">Let's lift, ${this.currentUser.name}</h2>
+                                </div>
+                                <button onclick="app.navigate('security')" class="text-slate-400 hover:text-white text-xs p-2 bg-slate-700/50 rounded-xl border border-slate-600" title="Security Settings">
+                                    <i class="fa-solid fa-shield-halved"></i>
+                                </button>
                             </div>
-                            <button onclick="app.navigate('measurements')" class="bg-slate-700 hover:bg-slate-650 text-pink-300 border border-slate-600 px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center transition-colors">
-                                <i class="fa-solid fa-ruler-combined mr-1.5"></i> Measurements
-                            </button>
+                            <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-700/60">
+                                <button onclick="app.navigate('measurements')" class="bg-slate-700/70 hover:bg-slate-700 text-pink-300 border border-slate-600/80 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center transition-colors">
+                                    <i class="fa-solid fa-ruler-combined mr-1.5"></i> Body Progress
+                                </button>
+                                <button onclick="app.navigate('group_summary')" class="bg-slate-700/70 hover:bg-slate-700 text-purple-300 border border-slate-600/80 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center transition-colors">
+                                    <i class="fa-solid fa-users mr-1.5"></i> Group Roster
+                                </button>
+                            </div>
                         </div>
 
+                        <!-- Coach's Assigned Workout Broadcast Banner -->
+                        ${isAssignedActive ? `
+                            <div class="bg-gradient-to-r from-purple-900/40 to-pink-900/40 border border-pink-500/40 p-4 rounded-2xl space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs font-bold text-pink-400 uppercase tracking-wider flex items-center">
+                                        <i class="fa-solid fa-bullhorn mr-1.5"></i> Coach's Workout for Today
+                                    </span>
+                                    ${this.isCoachMode ? `<button onclick="app.clearAssignedWorkout()" class="text-xs text-slate-400 hover:text-red-400">Clear</button>` : ''}
+                                </div>
+                                <p class="text-sm font-semibold text-white">${assigned.note || 'Focus on these target lifts for today\'s session!'}</p>
+                            </div>
+                        ` : ''}
+
+                        <!-- Coach Action Bar -->
+                        ${this.isCoachMode ? `
+                            <div class="bg-amber-500/10 border border-amber-500/30 p-3 rounded-xl flex items-center justify-between">
+                                <div class="flex items-center space-x-2 text-xs text-amber-300 font-semibold">
+                                    <i class="fa-solid fa-crown text-amber-400"></i>
+                                    <span>Coach Portal Active</span>
+                                </div>
+                                <button onclick="app.navigate('coach_push')" class="bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold px-3 py-1.5 rounded-lg text-xs transition-colors">
+                                    <i class="fa-solid fa-paper-plane mr-1"></i> Push Today's Workout
+                                </button>
+                            </div>
+                        ` : ''}
+
+                        <!-- Exercises Header -->
                         <div class="flex items-center justify-between">
-                            <h3 class="font-bold text-slate-200 text-sm uppercase tracking-wider">Exercises & Quick Log</h3>
-                            <button onclick="app.navigate('add_exercise')" class="text-xs text-pink-400 hover:text-pink-300 font-semibold flex items-center">
-                                <i class="fa-solid fa-plus mr-1"></i> Add Custom Exercise
+                            <h3 class="font-bold text-slate-200 text-sm uppercase tracking-wider">Exercises (${this.state.exercises.length})</h3>
+                            <button onclick="app.navigate('add_exercise')" class="text-xs text-pink-400 hover:text-pink-300 font-semibold flex items-center bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-lg">
+                                <i class="fa-solid fa-plus mr-1"></i> Add Exercise
                             </button>
                         </div>
 
+                        <!-- Exercise Cards List -->
                         <div class="space-y-4">
                             ${exercisesHtml}
                         </div>
+                    </div>
+                `;
+            }
+
+            renderCoachPushView() {
+                const assigned = this.state.assignedWorkout || {};
+                const currentSelected = assigned.exerciseIds || [];
+
+                let checkboxesHtml = this.state.exercises.map(ex => {
+                    const isChecked = currentSelected.includes(ex.id) ? 'checked' : '';
+                    return `
+                        <label class="flex items-center space-x-3 bg-slate-800 border border-slate-700/70 p-3 rounded-xl cursor-pointer hover:border-pink-500/50 transition-colors">
+                            <input type="checkbox" name="selectedEx" value="${ex.id}" ${isChecked} class="w-4 h-4 accent-pink-500 rounded">
+                            <div>
+                                <span class="font-bold text-white text-sm block">${ex.name}</span>
+                                <span class="text-xs text-slate-400">${ex.category} • ${ex.trackType === 'time' ? 'Time-based' : 'Reps-based'}</span>
+                            </div>
+                        </label>
+                    `;
+                }).join('');
+
+                return `
+                    <div class="space-y-6">
+                        <button onclick="app.navigate('dashboard')" class="text-xs text-slate-400 hover:text-white flex items-center">
+                            <i class="fa-solid fa-arrow-left mr-1.5"></i> Back to Dashboard
+                        </button>
+
+                        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-4 space-y-2">
+                            <div class="flex items-center space-x-2">
+                                <i class="fa-solid fa-crown text-amber-400"></i>
+                                <h2 class="text-lg font-bold text-white">Push Today's Workout</h2>
+                            </div>
+                            <p class="text-xs text-slate-400">Select exercises for today's session. They will be highlighted and pinned to the top of everyone's app.</p>
+                        </div>
+
+                        <form onsubmit="event.preventDefault(); const selected = Array.from(this.querySelectorAll('input[name=selectedEx]:checked')).map(cb => cb.value); app.pushWorkout(selected, this.coachNote.value);" class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Coach's Message / Focus Notes</label>
+                                <input type="text" name="coachNote" value="${assigned.note || ''}" placeholder="e.g. Heavy Lower Body focus! 3 sets each." class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-pink-500">
+                            </div>
+
+                            <div class="space-y-2">
+                                <label class="block text-xs font-semibold text-slate-400 uppercase">Select Exercises for Today</label>
+                                <div class="space-y-2 max-h-96 overflow-y-auto pr-1">
+                                    ${checkboxesHtml}
+                                </div>
+                            </div>
+
+                            <button type="submit" class="w-full bg-gradient-to-r from-amber-500 to-pink-500 text-slate-900 font-bold py-3 rounded-xl text-sm shadow-lg hover:opacity-90 transition-opacity">
+                                <i class="fa-solid fa-paper-plane mr-2"></i> Broadcast Workout to Group
+                            </button>
+                        </form>
                     </div>
                 `;
             }
@@ -463,9 +755,12 @@
                 let historyHtml = userLogs.length === 0 ? 
                     `<p class="text-xs text-slate-400 text-center py-4">No logged history for this exercise yet.</p>` :
                     userLogs.map(l => `
-                        <div class="bg-slate-800 border border-slate-700/60 rounded-xl p-3 flex items-center justify-between text-sm">
+                        <div class="bg-slate-800 border ${l.isPR ? 'border-amber-500/50 bg-amber-500/5' : 'border-slate-700/60'} rounded-xl p-3 flex items-center justify-between text-sm">
                             <div>
-                                <span class="font-bold text-white">${l.weight} ${ex.defaultUnit} × ${l.reps} reps</span>
+                                <div class="flex items-center space-x-2">
+                                    <span class="font-bold text-white">${l.weight ? l.weight + ' lbs × ' : ''}${l.performanceValue || l.reps || ''}</span>
+                                    ${l.isPR ? `<span class="text-[10px] bg-amber-500/20 text-amber-300 font-bold px-1.5 py-0.5 rounded">PR</span>` : ''}
+                                </div>
                                 <span class="text-xs text-slate-400 block">${l.date} ${l.notes ? '• ' + l.notes : ''}</span>
                             </div>
                         </div>
@@ -478,17 +773,19 @@
                         </button>
 
                         <div class="bg-slate-800 border border-slate-700 rounded-2xl p-4 space-y-2">
-                            <span class="text-xs font-semibold text-pink-400 uppercase tracking-wider">${ex.category}</span>
+                            <span class="text-xs font-semibold text-pink-400 uppercase tracking-wider">${ex.category} • ${ex.trackType === 'time' ? 'Time Tracked' : 'Rep Tracked'}</span>
                             <h2 class="text-xl font-bold text-white">${ex.name}</h2>
-                            <p class="text-xs text-slate-400">Progress chart showing your max weight lifted over time.</p>
+                            <p class="text-xs text-slate-400">Progress chart showing your performance over time.</p>
                         </div>
 
+                        <!-- Chart Container -->
                         <div class="bg-slate-800 border border-slate-700 rounded-2xl p-4">
                             <div class="h-64 relative">
                                 <canvas id="progressChart"></canvas>
                             </div>
                         </div>
 
+                        <!-- History Section -->
                         <div class="space-y-3">
                             <h3 class="font-bold text-slate-300 text-sm uppercase tracking-wider">Workout History</h3>
                             <div class="space-y-2">
@@ -508,14 +805,14 @@
                 const ctx = document.getElementById('progressChart').getContext('2d');
                 
                 const labels = userLogs.map(l => l.date);
-                const data = userLogs.map(l => l.weight);
+                const data = userLogs.map(l => l.weight || parseFloat(l.performanceValue) || 0);
 
                 new Chart(ctx, {
                     type: 'line',
                     data: {
                         labels: labels,
                         datasets: [{
-                            label: `Weight (${ex.defaultUnit})`,
+                            label: `Weight / Value`,
                             data: data,
                             borderColor: '#ec4899',
                             backgroundColor: 'rgba(236, 72, 153, 0.1)',
@@ -529,9 +826,7 @@
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        plugins: {
-                            legend: { display: false }
-                        },
+                        plugins: { legend: { display: false } },
                         scales: {
                             x: {
                                 grid: { color: 'rgba(255, 255, 255, 0.05)' },
@@ -574,7 +869,7 @@
 
                         <div class="bg-slate-800 border border-slate-700 rounded-2xl p-4">
                             <h2 class="text-lg font-bold text-white mb-1">Body Measurements</h2>
-                            <p class="text-xs text-slate-400 mb-4">Optional tracking over time to monitor your physical progress.</p>
+                            <p class="text-xs text-slate-400 mb-4">Optional tracking to monitor physical body progress over time.</p>
                             
                             <form onsubmit="event.preventDefault(); app.logMeasurements(this.weight.value, this.waist.value, this.hips.value, this.thighs.value, this.arms.value);" class="space-y-3">
                                 <div class="grid grid-cols-2 gap-3">
@@ -615,6 +910,85 @@
                 `;
             }
 
+            renderSecurityView() {
+                const currentPin = this.currentUser.pin || '';
+                return `
+                    <div class="space-y-6">
+                        <button onclick="app.navigate('dashboard')" class="text-xs text-slate-400 hover:text-white flex items-center">
+                            <i class="fa-solid fa-arrow-left mr-1.5"></i> Back to Dashboard
+                        </button>
+
+                        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-4 space-y-4">
+                            <div>
+                                <h2 class="text-lg font-bold text-white flex items-center">
+                                    <i class="fa-solid fa-shield-halved text-pink-400 mr-2"></i> Profile Security
+                                </h2>
+                                <p class="text-xs text-slate-400 mt-1">Set an optional 4-digit PIN to prevent others from accessing your profile or body measurements.</p>
+                            </div>
+
+                            <form onsubmit="event.preventDefault(); app.setUserPin(this.pin.value);" class="space-y-4">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">4-Digit PIN Lock</label>
+                                    <input type="password" maxlength="4" name="pin" value="${currentPin}" placeholder="Leave blank to disable" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-center text-lg tracking-widest text-white focus:outline-none focus:border-pink-500">
+                                </div>
+                                <button type="submit" class="w-full bg-gradient-to-r from-pink-500 to-purple-600 text-white font-semibold py-2.5 rounded-xl text-sm shadow-lg shadow-pink-500/20 hover:opacity-90 transition-opacity">
+                                    ${currentPin ? 'Update PIN' : 'Enable PIN Protection'}
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                `;
+            }
+
+            renderGroupSummaryView() {
+                const today = new Date().toISOString().split('T')[0];
+
+                let membersHtml = this.state.users.map(u => {
+                    const uLogs = this.state.logs.filter(l => l.userId === u.id);
+                    const loggedToday = uLogs.some(l => l.date === today);
+                    const totalLifts = uLogs.length;
+
+                    return `
+                        <div class="bg-slate-800 border border-slate-700/80 p-3.5 rounded-xl flex items-center justify-between">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-9 h-9 rounded-lg bg-pink-500/20 border border-pink-500/30 text-pink-400 flex items-center justify-center font-bold text-sm">
+                                    ${u.name.charAt(0)}
+                                </div>
+                                <div>
+                                    <span class="font-bold text-white text-sm block">${u.name}</span>
+                                    <span class="text-xs text-slate-400">${totalLifts} total set${totalLifts === 1 ? '' : 's'} recorded</span>
+                                </div>
+                            </div>
+                            <div>
+                                ${loggedToday ? 
+                                    `<span class="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[11px] font-bold px-2 py-1 rounded-md flex items-center"><i class="fa-solid fa-circle-check mr-1"></i> Active Today</span>` :
+                                    `<span class="bg-slate-700 text-slate-400 text-[11px] font-medium px-2 py-1 rounded-md">Resting</span>`
+                                }
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                return `
+                    <div class="space-y-6">
+                        <button onclick="app.navigate('dashboard')" class="text-xs text-slate-400 hover:text-white flex items-center">
+                            <i class="fa-solid fa-arrow-left mr-1.5"></i> Back to Dashboard
+                        </button>
+
+                        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-4 space-y-1">
+                            <h2 class="text-lg font-bold text-white flex items-center">
+                                <i class="fa-solid fa-users text-purple-400 mr-2"></i> Group Roster & Activity
+                            </h2>
+                            <p class="text-xs text-slate-400">See who is active in today's training session.</p>
+                        </div>
+
+                        <div class="space-y-2">
+                            ${membersHtml}
+                        </div>
+                    </div>
+                `;
+            }
+
             renderAddExerciseView() {
                 return `
                     <div class="space-y-6">
@@ -624,12 +998,12 @@
 
                         <div class="bg-slate-800 border border-slate-700 rounded-2xl p-4">
                             <h2 class="text-lg font-bold text-white mb-1">Add Custom Exercise</h2>
-                            <p class="text-xs text-slate-400 mb-4">Add a new lift to your group's routine.</p>
+                            <p class="text-xs text-slate-400 mb-4">Add a new movement to your group's routine.</p>
 
-                            <form onsubmit="event.preventDefault(); app.addNewExercise(this.exName.value, this.exCategory.value, this.exUnit.value);" class="space-y-4">
+                            <form onsubmit="event.preventDefault(); app.addNewExercise(this.exName.value, this.exCategory.value, this.exTrackType.value, this.exUnit.value);" class="space-y-4">
                                 <div>
                                     <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Exercise Name</label>
-                                    <input type="text" name="exName" placeholder="e.g. Bulgarian Split Squat" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-pink-500">
+                                    <input type="text" name="exName" placeholder="e.g. Kettlebell Halo" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-pink-500">
                                 </div>
                                 <div>
                                     <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Category</label>
@@ -638,13 +1012,23 @@
                                         <option value="Upper Body">Upper Body</option>
                                         <option value="Full Body">Full Body</option>
                                         <option value="Core">Core</option>
+                                        <option value="Cardio/Monostructural">Cardio/Monostructural</option>
+                                        <option value="Gymnastics/Core">Gymnastics/Core</option>
                                     </select>
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Unit</label>
+                                    <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Tracking Format</label>
+                                    <select name="exTrackType" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-pink-500">
+                                        <option value="reps">Reps-based (e.g., 10 reps @ 135 lbs)</option>
+                                        <option value="time">Time-based (e.g., 60 seconds @ 50 lbs)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Default Weight Unit</label>
                                     <select name="exUnit" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-pink-500">
                                         <option value="lbs">lbs</option>
                                         <option value="kg">kg</option>
+                                        <option value="N/A">Bodyweight / No Weight</option>
                                     </select>
                                 </div>
                                 <button type="submit" class="w-full bg-gradient-to-r from-pink-500 to-purple-600 text-white font-semibold py-2.5 rounded-xl text-sm shadow-lg shadow-pink-500/20 hover:opacity-90 transition-opacity">
@@ -652,15 +1036,3 @@
                                 </button>
                             </form>
                         </div>
-                    </div>
-                `;
-            }
-        }
-
-        // Initialize App on load
-        window.onload = () => {
-            window.app = new App();
-        };
-    </script>
-</body>
-</html>
