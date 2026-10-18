@@ -1,1105 +1,795 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Iron Sisters Strength Tracker</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Chart.js for progress graphs -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- FontAwesome for icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Plus Jakarta Sans', sans-serif; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Locker Room Ladies Workout Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Firebase App & Firestore SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <style>
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
 </head>
-<body class="bg-slate-900 text-slate-100 h-full flex flex-col antialiased">
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans pb-12">
 
-    <!-- Top Header -->
-    <header class="bg-slate-800 border-b border-slate-700 px-4 py-3 sticky top-0 z-50 flex items-center justify-between shadow-md">
-        <div class="flex items-center space-x-3 cursor-pointer" onclick="app.goHome()">
-            <div class="bg-gradient-to-tr from-pink-500 to-purple-600 p-2 rounded-xl text-white shadow-lg shadow-pink-500/20">
-                <i class="fa-solid fa-dumbbell text-lg"></i>
+  <!-- Header / Navigation -->
+  <header class="bg-slate-800 border-b border-slate-700 sticky top-0 z-50">
+    <div class="max-w-md mx-auto px-4 py-3 flex justify-between items-center">
+      <div class="flex items-center space-x-2">
+        <span class="text-2xl">🏋️‍♀️</span>
+        <div>
+          <h1 class="font-bold text-lg leading-tight text-pink-400">Locker Room Ladies</h1>
+          <p class="text-xs text-slate-400" id="current-user-display">Selecting Profile...</p>
+        </div>
+      </div>
+      <div class="flex items-center space-x-2">
+        <button id="btn-roster" onclick="app.showRoster()" class="p-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs font-semibold text-slate-200 transition">
+          👥 Group
+        </button>
+        <button id="btn-coach" onclick="app.showCoachPortal()" class="p-2 bg-pink-600 hover:bg-pink-500 rounded-lg text-xs font-semibold text-white transition">
+          🛡️ Coach
+        </button>
+        <button id="btn-switch-user" onclick="app.switchUser()" class="p-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs text-slate-300">
+          Switch
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-md mx-auto px-4 pt-4">
+
+    <!-- View 1: Profile Selection / Login -->
+    <section id="view-user-select" class="space-y-4">
+      <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 text-center space-y-4 shadow-xl">
+        <h2 class="text-xl font-bold text-slate-100">Welcome Back! 👋</h2>
+        <p class="text-sm text-slate-400">Select your name to start tracking your lifts or view your progress.</p>
+        
+        <select id="user-dropdown" class="w-full bg-slate-900 border border-slate-700 text-slate-100 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-pink-500">
+          <option value="">-- Choose Your Name --</option>
+        </select>
+
+        <button onclick="app.loginSelectedUser()" class="w-full bg-pink-600 hover:bg-pink-500 text-white font-bold py-3 rounded-xl shadow-lg transition">
+          Enter Workout App
+        </button>
+
+        <div class="pt-4 border-t border-slate-700">
+          <p class="text-xs text-slate-400 mb-2">New to the group?</p>
+          <button onclick="app.showAddUserModal()" class="text-sm text-pink-400 font-semibold hover:underline">
+            + Create New Profile
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- View 2: Main Dashboard (Exercises List) -->
+    <section id="view-dashboard" class="hidden space-y-4">
+      
+      <!-- Coach Daily Focus Banner -->
+      <div id="coach-daily-workout-banner" class="hidden bg-gradient-to-r from-pink-900/60 to-purple-900/60 border border-pink-500/40 p-4 rounded-xl space-y-2">
+        <div class="flex justify-between items-center">
+          <span class="bg-pink-500 text-white text-xs font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">Today's Focus</span>
+          <span id="coach-workout-date" class="text-xs text-slate-300"></span>
+        </div>
+        <h3 id="coach-workout-title" class="font-bold text-slate-100"></h3>
+        <p id="coach-workout-notes" class="text-xs text-slate-300 italic"></p>
+      </div>
+
+      <!-- Search & Filters -->
+      <div class="flex space-x-2">
+        <input type="text" id="exercise-search" onkeyup="app.filterExercises()" placeholder="🔍 Search exercises..." class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-pink-500">
+        <button onclick="app.showCustomExerciseModal()" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-pink-400 font-semibold px-3 py-2.5 rounded-xl text-xs whitespace-nowrap">
+          + Add
+        </button>
+      </div>
+
+      <!-- Quick Action Tabs -->
+      <div class="flex space-x-2 border-b border-slate-800 pb-2">
+        <button onclick="app.setDashboardTab('all')" id="tab-all" class="text-xs font-bold px-3 py-1.5 rounded-lg bg-pink-600 text-white">All Movements</button>
+        <button onclick="app.setDashboardTab('measurements')" id="tab-measurements" class="text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-800 text-slate-400">📏 Measurements</button>
+      </div>
+
+      <!-- Exercises List Container -->
+      <div id="exercise-list-container" class="space-y-3">
+        <!-- Exercise Cards populated dynamically -->
+      </div>
+
+      <!-- Measurements Section Container -->
+      <div id="measurements-container" class="hidden space-y-4">
+        <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 space-y-3">
+          <h3 class="font-bold text-pink-400 text-sm">Log Body Metrics</h3>
+          <div class="grid grid-cols-2 gap-2 text-xs">
+            <div>
+              <label class="text-slate-400">Weight (lbs)</label>
+              <input type="number" id="metric-weight" class="w-full bg-slate-900 border border-slate-700 p-2 rounded-lg text-slate-100">
             </div>
             <div>
-                <h1 class="font-bold text-lg tracking-tight bg-gradient-to-r from-pink-400 to-purple-300 bg-clip-text text-transparent">Iron Sisters</h1>
-                <p class="text-xs text-slate-400" id="header-subtitle">Strength Tracker</p>
+              <label class="text-slate-400">Waist (in)</label>
+              <input type="number" id="metric-waist" class="w-full bg-slate-900 border border-slate-700 p-2 rounded-lg text-slate-100">
             </div>
+          </div>
+          <button onclick="app.saveMetrics()" class="w-full bg-pink-600 hover:bg-pink-500 text-white text-xs font-bold py-2 rounded-lg">
+            Save Body Metrics
+          </button>
         </div>
-        <div id="header-user-info" class="hidden flex items-center space-x-2">
-            <span id="current-user-badge" class="text-xs font-semibold px-2.5 py-1 bg-slate-700 text-pink-300 rounded-full border border-slate-600"></span>
-            <button id="coach-toggle-btn" onclick="app.toggleCoachMode()" class="text-xs text-amber-300 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 px-2.5 py-1 rounded-lg transition-colors font-medium">
-                <i class="fa-solid fa-crown mr-1"></i> Coach
-            </button>
-            <button onclick="app.logout()" class="text-xs text-slate-400 hover:text-white transition-colors bg-slate-700/50 hover:bg-slate-700 p-1.5 rounded-lg border border-slate-600/50" title="Switch User">
-                <i class="fa-solid fa-right-from-bracket"></i>
-            </button>
+        <div class="bg-slate-800 p-4 rounded-xl border border-slate-700">
+          <h4 class="font-bold text-xs text-slate-300 mb-2">Metrics History</h4>
+          <div id="metrics-history-list" class="space-y-2 text-xs text-slate-400">
+            <!-- Populated dynamically -->
+          </div>
         </div>
-    </header>
+      </div>
+    </section>
 
-    <!-- Main Content Viewport -->
-    <main id="app-container" class="flex-1 overflow-y-auto p-4 max-w-md w-full mx-auto pb-20">
-        <!-- Dynamic content inserted via JavaScript -->
-    </main>
-
-    <!-- Custom Modal -->
-    <div id="modal-container" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-        <div id="modal-content" class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-sm w-full shadow-2xl transform transition-all">
-            <!-- Modal body dynamically populated -->
+    <!-- View 3: Single Exercise Chart & Detail -->
+    <section id="view-exercise-detail" class="hidden space-y-4">
+      <button onclick="app.showDashboard()" class="text-xs font-semibold text-pink-400 hover:underline">← Back to Exercises</button>
+      
+      <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 space-y-3">
+        <div class="flex justify-between items-start">
+          <div>
+            <h2 id="detail-exercise-title" class="font-bold text-lg text-slate-100"></h2>
+            <span id="detail-exercise-category" class="text-xs text-slate-400"></span>
+          </div>
+          <span id="detail-exercise-pr" class="bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-bold px-2 py-1 rounded-lg">
+            PR: -
+          </span>
         </div>
-    </div>
 
-    <!-- Firebase & App Modules -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        <!-- Quick Log Box inside Exercise Detail -->
+        <div class="bg-slate-900 p-3 rounded-lg border border-slate-700 flex items-center space-x-2">
+          <input type="number" id="detail-input-weight" placeholder="lbs" class="w-1/3 bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs text-slate-100">
+          <input type="text" id="detail-input-val" placeholder="reps/time" class="w-1/3 bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs text-slate-100">
+          <button onclick="app.logCurrentExerciseDetail()" class="w-1/3 bg-pink-600 hover:bg-pink-500 font-bold text-xs py-2 rounded-lg text-white">
+            Log Set
+          </button>
+        </div>
 
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'iron-sisters-app';
-        let firebaseConfig = null;
+        <!-- Chart Container -->
+        <div class="bg-slate-900 p-2 rounded-lg border border-slate-700">
+          <canvas id="progressChart" height="200"></canvas>
+        </div>
+      </div>
+
+      <!-- History List for this Exercise -->
+      <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 space-y-2">
+        <h3 class="font-bold text-xs text-slate-300">Your History</h3>
+        <div id="exercise-history-list" class="space-y-2 text-xs text-slate-300">
+          <!-- Log entries populated dynamically -->
+        </div>
+      </div>
+    </section>
+
+    <!-- View 4: Coach Portal -->
+    <section id="view-coach" class="hidden space-y-4">
+      <div class="flex justify-between items-center">
+        <h2 class="font-bold text-lg text-pink-400">🛡️ Coach Portal</h2>
+        <button onclick="app.showDashboard()" class="text-xs text-slate-400 hover:text-slate-200">Close</button>
+      </div>
+
+      <!-- Coach Workout Broadcaster -->
+      <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 space-y-3">
+        <h3 class="font-bold text-sm text-slate-200">Push Workout of the Day</h3>
+        <input type="text" id="coach-title-input" placeholder="e.g. Lower Body Power & Core" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-slate-100">
+        <textarea id="coach-notes-input" placeholder="Workout notes / superset instructions..." class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-slate-100 h-16"></textarea>
         
-        try {
-            if (typeof __firebase_config !== 'undefined' && __firebase_config) {
-                firebaseConfig = JSON.parse(__firebase_config);
-            }
-        } catch(e) {
-            console.warn("Firebase configuration non-standard or missing, falling back to local memory.");
+        <p class="text-xs text-slate-400 font-semibold">Select Exercises to Highlight:</p>
+        <div id="coach-exercise-selector" class="max-h-40 overflow-y-auto bg-slate-900 p-2 rounded-lg border border-slate-700 space-y-1 text-xs">
+          <!-- Exercise checkboxes populated dynamically -->
+        </div>
+
+        <button onclick="app.publishCoachWorkout()" class="w-full bg-pink-600 hover:bg-pink-500 text-white font-bold py-2.5 rounded-lg text-xs">
+          📢 Publish Workout to Group
+        </button>
+      </div>
+
+      <!-- Manage Group Roster & Profiles -->
+      <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 space-y-3">
+        <div class="flex justify-between items-center">
+          <h3 class="font-bold text-sm text-slate-200">Manage Group Roster</h3>
+          <button onclick="app.showAddUserModal()" class="text-xs text-pink-400 font-semibold hover:underline">+ Add Member</button>
+        </div>
+        
+        <div id="coach-roster-list" class="space-y-2 text-xs">
+          <!-- Roster list with DELETE buttons populated dynamically -->
+        </div>
+
+        <div class="pt-3 border-t border-slate-700">
+          <button onclick="app.clearAllDemoData()" class="w-full bg-red-900/40 border border-red-500/40 text-red-300 hover:bg-red-900/60 font-semibold py-2 rounded-lg text-xs">
+            🗑️ Clear All Demo Profiles & Logs
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- View 5: Group Roster & Attendance Hub -->
+    <section id="view-roster" class="hidden space-y-4">
+      <div class="flex justify-between items-center">
+        <h2 class="font-bold text-lg text-slate-100">👥 Group Roster</h2>
+        <button onclick="app.showDashboard()" class="text-xs text-slate-400 hover:text-slate-200">Close</button>
+      </div>
+      <div id="group-roster-cards" class="space-y-3 text-xs">
+        <!-- Populated dynamically -->
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Modal: PIN Entry -->
+  <div id="modal-pin" class="fixed inset-0 bg-black/80 flex items-center justify-center p-4 hidden z-50">
+    <div class="bg-slate-800 border border-slate-700 p-6 rounded-2xl max-w-xs w-full space-y-4 text-center">
+      <h3 class="font-bold text-lg text-slate-100">Enter Security PIN</h3>
+      <p class="text-xs text-slate-400">This profile is locked with a 4-digit PIN.</p>
+      <input type="password" maxlength="4" id="pin-input" class="w-full bg-slate-900 text-center tracking-widest text-2xl py-3 border border-slate-700 rounded-xl text-slate-100 focus:outline-none focus:ring-2 focus:ring-pink-500">
+      <div class="flex space-x-2">
+        <button onclick="app.closePinModal()" class="w-1/2 bg-slate-700 text-slate-300 py-2.5 rounded-xl text-xs">Cancel</button>
+        <button onclick="app.verifyPin()" class="w-1/2 bg-pink-600 text-white font-bold py-2.5 rounded-xl text-xs">Unlock</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Add User -->
+  <div id="modal-add-user" class="fixed inset-0 bg-black/80 flex items-center justify-center p-4 hidden z-50">
+    <div class="bg-slate-800 border border-slate-700 p-6 rounded-2xl max-w-xs w-full space-y-4">
+      <h3 class="font-bold text-lg text-slate-100">Create Profile</h3>
+      <input type="text" id="new-user-name" placeholder="Member Name" class="w-full bg-slate-900 border border-slate-700 p-2.5 text-xs text-slate-100 rounded-xl">
+      <input type="password" maxlength="4" id="new-user-pin" placeholder="Optional 4-Digit PIN" class="w-full bg-slate-900 border border-slate-700 p-2.5 text-xs text-slate-100 rounded-xl">
+      <div class="flex space-x-2">
+        <button onclick="app.closeAddUserModal()" class="w-1/2 bg-slate-700 text-slate-300 py-2.5 rounded-xl text-xs">Cancel</button>
+        <button onclick="app.createUserProfile()" class="w-1/2 bg-pink-600 text-white font-bold py-2.5 rounded-xl text-xs">Save Profile</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Add Custom Exercise -->
+  <div id="modal-add-exercise" class="fixed inset-0 bg-black/80 flex items-center justify-center p-4 hidden z-50">
+    <div class="bg-slate-800 border border-slate-700 p-6 rounded-2xl max-w-xs w-full space-y-4">
+      <h3 class="font-bold text-lg text-slate-100">Add Exercise</h3>
+      <input type="text" id="custom-ex-name" placeholder="Exercise Name" class="w-full bg-slate-900 border border-slate-700 p-2.5 text-xs text-slate-100 rounded-xl">
+      <select id="custom-ex-category" class="w-full bg-slate-900 border border-slate-700 p-2.5 text-xs text-slate-100 rounded-xl">
+        <option value="Lower Body">Lower Body</option>
+        <option value="Upper Body">Upper Body</option>
+        <option value="Core">Core</option>
+        <option value="Cardio / Conditioning">Cardio / Conditioning</option>
+      </select>
+      <select id="custom-ex-type" class="w-full bg-slate-900 border border-slate-700 p-2.5 text-xs text-slate-100 rounded-xl">
+        <option value="reps">Reps Based (e.g. 10 reps)</option>
+        <option value="time">Time Based (e.g. 60s / 1:30)</option>
+      </select>
+      <div class="flex space-x-2">
+        <button onclick="app.closeCustomExerciseModal()" class="w-1/2 bg-slate-700 text-slate-300 py-2.5 rounded-xl text-xs">Cancel</button>
+        <button onclick="app.saveCustomExercise()" class="w-1/2 bg-pink-600 text-white font-bold py-2.5 rounded-xl text-xs">Save Exercise</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Application Logic -->
+  <script>
+    // Initial Exercises Array
+    const DEFAULT_EXERCISES = [
+      { id: 'ex_1', name: 'Barbell Back Squat', category: 'Lower Body', type: 'reps' },
+      { id: 'ex_2', name: 'Barbell Bench Press', category: 'Upper Body', type: 'reps' },
+      { id: 'ex_3', name: 'Conventional Deadlift', category: 'Lower Body', type: 'reps' },
+      { id: 'ex_4', name: 'Strict Shoulder Press', category: 'Upper Body', type: 'reps' },
+      { id: 'ex_5', name: 'Plank', category: 'Core', type: 'time' },
+      { id: 'ex_6', name: '1km Run', category: 'Cardio / Conditioning', type: 'time' },
+      { id: 'ex_7', name: 'Box Jump', category: 'Lower Body', type: 'reps' },
+      { id: 'ex_8', name: 'Concept2 Row / 1000m Row', category: 'Cardio / Conditioning', type: 'time' }
+    ];
+
+    const DEFAULT_USERS = [
+      { id: 'u_1', name: 'Sarah', pin: '' },
+      { id: 'u_2', name: 'Jessica', pin: '' },
+      { id: 'u_3', name: 'Ashley', pin: '' }
+    ];
+
+    class App {
+      constructor() {
+        this.currentUser = null;
+        this.selectedUserForPin = null;
+        this.activeExercise = null;
+        this.chartInstance = null;
+        this.activeTab = 'all';
+
+        this.initStorage();
+        this.renderUserDropdown();
+      }
+
+      initStorage() {
+        if (!localStorage.getItem('lrl_users')) {
+          localStorage.setItem('lrl_users', JSON.stringify(DEFAULT_USERS));
         }
-
-        const INITIAL_EXERCISES = [
-            { id: '1km_run', name: '1km Run', category: 'Cardio/Monostructural', defaultUnit: 'time', trackType: 'time' },
-            { id: 'abmat_situp', name: 'AbMat Sit-Up', category: 'Core', defaultUnit: 'reps', trackType: 'reps' },
-            { id: 'air_bike', name: 'Air Bike (Assault/Echo Bike)', category: 'Cardio/Monostructural', defaultUnit: 'cal/time', trackType: 'time' },
-            { id: 'arnold_press', name: 'Arnold Press', category: 'Upper Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'back_squat', name: 'Back Squat', category: 'Lower Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'bar_muscle_up', name: 'Bar Muscle-Up', category: 'Gymnastics/Core', defaultUnit: 'reps', trackType: 'reps' },
-            { id: 'barbell_bench_press', name: 'Barbell Bench Press', category: 'Upper Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'barbell_bent_over_row', name: 'Barbell Bent-Over Row', category: 'Upper Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'barbell_hip_thrust', name: 'Barbell Hip Thrust', category: 'Lower Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'box_jump', name: 'Box Jump', category: 'Plyo/Lower', defaultUnit: 'reps', trackType: 'reps' },
-            { id: 'box_jump_over', name: 'Box Jump-Over', category: 'Plyo/Lower', defaultUnit: 'reps', trackType: 'reps' },
-            { id: 'box_squat', name: 'Box Squat', category: 'Lower Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'box_step_up', name: 'Box Step-Up (Weighted or Bodyweight)', category: 'Lower Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'bulgarian_split_squat', name: 'Bulgarian Split Squat', category: 'Lower Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'burpee_broad_jump', name: 'Burpee Broad Jump', category: 'Full Body', defaultUnit: 'reps', trackType: 'reps' },
-            { id: 'c2b_pullup', name: 'Chest-to-Bar Pull-Up (C2B)', category: 'Upper Body', defaultUnit: 'reps', trackType: 'reps' },
-            { id: 'chest_to_floor_burpee', name: 'Chest-to-Floor Burpee', category: 'Full Body', defaultUnit: 'reps', trackType: 'reps' },
-            { id: 'chin_up', name: 'Chin-Up', category: 'Upper Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'clean_and_press', name: 'Clean & Press (Barbell/DB/KB)', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'concept2_bikeerg', name: 'Concept2 BikeErg', category: 'Cardio/Monostructural', defaultUnit: 'time', trackType: 'time' },
-            { id: 'concept2_row_1000m', name: 'Concept2 Row / 1000m Row', category: 'Cardio/Monostructural', defaultUnit: 'time', trackType: 'time' },
-            { id: 'concept2_skierg_1000m', name: 'Concept2 SkiErg / 1000m SkiErg', category: 'Cardio/Monostructural', defaultUnit: 'time', trackType: 'time' },
-            { id: 'conventional_deadlift', name: 'Conventional Deadlift', category: 'Lower Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'curved_manual_treadmill', name: 'Curved Manual Treadmill', category: 'Cardio/Monostructural', defaultUnit: 'time', trackType: 'time' },
-            { id: 'db_kb_bench_press', name: 'DB/KB Bench Press', category: 'Upper Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'db_kb_floor_press', name: 'DB/KB Floor Press', category: 'Upper Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'deficit_push_up', name: 'Deficit Push-Up', category: 'Upper Body', defaultUnit: 'reps', trackType: 'reps' },
-            { id: 'devils_press', name: 'Devil\'s Press (DB)', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'double_under', name: 'Double Under (Jump Rope)', category: 'Cardio/Monostructural', defaultUnit: 'reps', trackType: 'reps' },
-            { id: 'farmers_carry', name: 'Farmer\'s Carry (Dual DB/KB)', category: 'Full Body', defaultUnit: 'lbs', trackType: 'time' },
-            { id: 'front_rack_carry', name: 'Front Rack Carry (Dual or Single DB/KB)', category: 'Full Body', defaultUnit: 'lbs', trackType: 'time' },
-            { id: 'front_squat', name: 'Front Squat', category: 'Lower Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'glute_bridge', name: 'Glute Bridge', category: 'Lower Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'goblet_squat', name: 'Goblet Squat (DB/KB)', category: 'Lower Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'good_morning', name: 'Good Morning', category: 'Lower Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'hand_release_push_up', name: 'Hand-Release Push-Up', category: 'Upper Body', defaultUnit: 'reps', trackType: 'reps' },
-            { id: 'hspu', name: 'Handstand Push-Up (HSPU)', category: 'Upper Body', defaultUnit: 'reps', trackType: 'reps' },
-            { id: 'hang_clean', name: 'Hang Clean', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'hang_snatch', name: 'Hang Snatch', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'incline_bench_press', name: 'Incline Bench Press', category: 'Upper Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'inverted_row', name: 'Inverted Row', category: 'Upper Body', defaultUnit: 'reps', trackType: 'reps' },
-            { id: 'single_under', name: 'Jump Rope (Single Under)', category: 'Cardio/Monostructural', defaultUnit: 'reps', trackType: 'reps' },
-            { id: 'kipping_butterfly_pullup', name: 'Kipping / Butterfly Pull-Up', category: 'Upper Body', defaultUnit: 'reps', trackType: 'reps' },
-            { id: 'knees_to_elbows', name: 'Knees-to-Elbows', category: 'Core', defaultUnit: 'reps', trackType: 'reps' },
-            { id: 'lat_pulldown', name: 'Lat Pulldown', category: 'Upper Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'med_ball_slam', name: 'Medicine Ball Slam', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'overhead_carry', name: 'Overhead Carry (Dual or Single DB/KB)', category: 'Full Body', defaultUnit: 'lbs', trackType: 'time' },
-            { id: 'overhead_squat', name: 'Overhead Squat', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'pendlay_row', name: 'Pendlay Row', category: 'Upper Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'plank', name: 'Plank', category: 'Core', defaultUnit: 'time', trackType: 'time' },
-            { id: 'power_clean', name: 'Power Clean (Barbell/DB/KB/Sandbag)', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'power_snatch', name: 'Power Snatch (Barbell/DB/KB)', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'push_jerk_split_jerk', name: 'Push Jerk / Split Jerk', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'push_press', name: 'Push Press (Barbell/DB/KB)', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'renegade_row', name: 'Renegade Row (DB/KB)', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'reverse_lunge', name: 'Reverse Lunge (Barbell/DB/KB/Sandbag)', category: 'Lower Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'ring_muscle_up', name: 'Ring Muscle-Up', category: 'Gymnastics/Core', defaultUnit: 'reps', trackType: 'reps' },
-            { id: 'ring_row', name: 'Ring Row', category: 'Upper Body', defaultUnit: 'reps', trackType: 'reps' },
-            { id: 'rdl', name: 'Romanian Deadlift / RDL (Barbell/DB/KB)', category: 'Lower Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'russian_twist', name: 'Russian Twist (Weighted)', category: 'Core', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'sandbag_clean', name: 'Sandbag Clean', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'sandbag_shoulder_toss', name: 'Sandbag Over-the-Shoulder Toss', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'sandbag_walking_lunge', name: 'Sandbag Walking Lunge', category: 'Lower Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'single_arm_row', name: 'Single-Arm Row (DB/KB)', category: 'Upper Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'sled_pull', name: 'Sled Pull', category: 'Full Body', defaultUnit: 'lbs', trackType: 'time' },
-            { id: 'sled_push', name: 'Sled Push', category: 'Full Body', defaultUnit: 'lbs', trackType: 'time' },
-            { id: 'squat_clean', name: 'Squat Clean', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'squat_snatch', name: 'Squat Snatch', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'standard_push_up', name: 'Standard Push-Up', category: 'Upper Body', defaultUnit: 'reps', trackType: 'reps' },
-            { id: 'stiff_legged_deadlift', name: 'Stiff-Legged Deadlift', category: 'Lower Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'strict_pull_up', name: 'Strict Pull-Up', category: 'Upper Body', defaultUnit: 'reps', trackType: 'reps' },
-            { id: 'strict_shoulder_press', name: 'Strict Shoulder Press (Barbell/DB/KB)', category: 'Upper Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'suitcase_carry', name: 'Suitcase Carry (Single DB/KB)', category: 'Full Body', defaultUnit: 'lbs', trackType: 'time' },
-            { id: 'sumo_deadlift', name: 'Sumo Deadlift', category: 'Lower Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'sdhp', name: 'Sumo Deadlift High Pull / SDHP (Barbell/KB)', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'swing_db_kb', name: 'Swing (DB/KB - Russian & American)', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'thruster', name: 'Thruster (Barbell/DB/KB)', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 't2b', name: 'Toes-to-Bar (T2B)', category: 'Core', defaultUnit: 'reps', trackType: 'reps' },
-            { id: 'turkish_get_up', name: 'Turkish Get-Up (DB/KB)', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'v_ups', name: 'V-Ups', category: 'Core', defaultUnit: 'reps', trackType: 'reps' },
-            { id: 'walking_lunge', name: 'Walking Lunge (Barbell/DB/KB)', category: 'Lower Body', defaultUnit: 'lbs', trackType: 'reps' },
-            { id: 'wall_balls', name: 'Wall Balls', category: 'Full Body', defaultUnit: 'lbs', trackType: 'reps' }
-        ];
-
-        class App {
-            constructor() {
-                this.db = null;
-                this.auth = null;
-                this.user = null;
-                this.isCoachMode = false;
-                this._chartInstance = null;
-
-                this.state = {
-                    users: [
-                        { id: 'sarah', name: 'Sarah M.', joined: '2026-01-10', pin: '' },
-                        { id: 'jess', name: 'Jess K.', joined: '2026-01-12', pin: '' },
-                        { id: 'amanda', name: 'Amanda R.', joined: '2026-01-15', pin: '' },
-                        { id: 'elena', name: 'Elena T.', joined: '2026-02-01', pin: '' }
-                    ],
-                    exercises: [...INITIAL_EXERCISES],
-                    logs: [],
-                    measurements: [],
-                    assignedWorkout: { date: '', exerciseIds: [], note: '' }
-                };
-
-                this.currentUser = null;
-                this.currentView = 'welcome';
-                this.selectedExerciseId = null;
-
-                this.initFirebase();
-            }
-
-            async initFirebase() {
-                // First load local storage for instant render
-                this.loadLocalState();
-
-                if (firebaseConfig) {
-                    try {
-                        const app = initializeApp(firebaseConfig);
-                        this.auth = getAuth(app);
-                        this.db = getFirestore(app);
-
-                        // Mandatory Auth Before Queries rule implementation
-                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                            await signInWithCustomToken(this.auth, __initial_auth_token);
-                        } else {
-                            await signInAnonymously(this.auth);
-                        }
-
-                        // Wait for currentUser to populate or auth state to settle
-                        this.user = this.auth.currentUser;
-                        if (!this.user) {
-                            await new Promise((resolve) => {
-                                const unsubscribe = onAuthStateChanged(this.auth, (u) => {
-                                    this.user = u;
-                                    unsubscribe();
-                                    resolve();
-                                });
-                            });
-                        }
-
-                        this.setupRealtimeListeners();
-                    } catch (e) {
-                        console.warn("Firestore initialization error, running in local mode:", e);
-                        this.render();
-                    }
-                } else {
-                    this.render();
-                }
-            }
-
-            loadLocalState() {
-                const saved = localStorage.getItem('iron_sisters_data');
-                if (saved) {
-                    try { 
-                        const parsed = JSON.parse(saved);
-                        this.state = { ...this.state, ...parsed }; 
-                        if (!parsed.exercises || parsed.exercises.length < INITIAL_EXERCISES.length) {
-                            this.state.exercises = INITIAL_EXERCISES;
-                        }
-                    } catch(e){}
-                }
-            }
-
-            saveLocalState() {
-                localStorage.setItem('iron_sisters_data', JSON.stringify(this.state));
-            }
-
-            setupRealtimeListeners() {
-                if (!this.db || !this.user) {
-                    this.render();
-                    return;
-                }
-
-                // Strictly adhering to /artifacts/{appId}/public/data/{collectionName}
-                const publicDocRef = doc(this.db, 'artifacts', appId, 'public', 'data', 'app_state');
-                
-                onSnapshot(publicDocRef, (snapshot) => {
-                    if (snapshot.exists()) {
-                        const data = snapshot.data();
-                        this.state.logs = data.logs || [];
-                        this.state.exercises = (data.exercises && data.exercises.length >= INITIAL_EXERCISES.length) ? data.exercises : INITIAL_EXERCISES;
-                        this.state.users = data.users || this.state.users;
-                        this.state.measurements = data.measurements || [];
-                        this.state.assignedWorkout = data.assignedWorkout || { date: '', exerciseIds: [], note: '' };
-                        this.saveLocalState();
-                        this.render();
-                    } else {
-                        setDoc(publicDocRef, {
-                            logs: [],
-                            exercises: INITIAL_EXERCISES,
-                            users: this.state.users,
-                            measurements: [],
-                            assignedWorkout: { date: '', exerciseIds: [], note: '' }
-                        }, { merge: true }).catch(err => console.warn("Initial doc set warning:", err));
-                        this.render();
-                    }
-                }, (err) => {
-                    console.warn("Firestore sync warning:", err);
-                    this.render();
-                });
-            }
-
-            async syncToFirestore() {
-                this.saveLocalState();
-                if (!this.db || !this.user) {
-                    return;
-                }
-                const publicDocRef = doc(this.db, 'artifacts', appId, 'public', 'data', 'app_state');
-                try {
-                    await setDoc(publicDocRef, {
-                        logs: this.state.logs,
-                        exercises: this.state.exercises,
-                        users: this.state.users,
-                        measurements: this.state.measurements,
-                        assignedWorkout: this.state.assignedWorkout
-                    }, { merge: true });
-                } catch(e) {
-                    console.warn("Cloud sync warning (saved locally):", e);
-                }
-            }
-
-            toggleCoachMode() {
-                this.isCoachMode = !this.isCoachMode;
-                const btn = document.getElementById('coach-toggle-btn');
-                if (btn) {
-                    if (this.isCoachMode) {
-                        btn.classList.add('bg-amber-500', 'text-slate-900', 'font-bold');
-                        btn.classList.remove('bg-amber-500/20', 'text-amber-300');
-                        this.showModal('Coach Mode Active 👑', 'You can now push workouts, add custom exercises, and monitor group activity.');
-                    } else {
-                        btn.classList.remove('bg-amber-500', 'text-slate-900', 'font-bold');
-                        btn.classList.add('bg-amber-500/20', 'text-amber-300');
-                    }
-                }
-                this.render();
-            }
-
-            navigate(view, param = null) {
-                this.currentView = view;
-                this.selectedExerciseId = param;
-                this.render();
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-            }
-
-            goHome() {
-                if (!this.currentUser) {
-                    this.navigate('welcome');
-                } else {
-                    this.navigate('dashboard');
-                }
-            }
-
-            promptUserLogin(userId) {
-                const targetUser = this.state.users.find(u => u.id === userId);
-                if (!targetUser) return;
-
-                if (targetUser.pin) {
-                    this.showPinModal(targetUser);
-                } else {
-                    this.login(targetUser.id);
-                }
-            }
-
-            showPinModal(targetUser) {
-                const modal = document.getElementById('modal-container');
-                const content = document.getElementById('modal-content');
-                if (!modal || !content) return;
-                content.innerHTML = `
-                    <h3 class="text-lg font-bold text-white mb-1"><i class="fa-solid fa-lock text-pink-400 mr-2"></i>Enter Security PIN</h3>
-                    <p class="text-slate-400 text-xs mb-4">Profile locked for <b>${targetUser.name}</b></p>
-                    <form onsubmit="event.preventDefault(); app.verifyPin('${targetUser.id}', this.pinInput.value);">
-                        <input type="password" maxlength="4" name="pinInput" placeholder="4-digit PIN" autofocus required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-center text-xl tracking-widest text-white mb-4 focus:outline-none focus:border-pink-500">
-                        <div class="flex space-x-2">
-                            <button type="button" onclick="app.closeModal()" class="flex-1 bg-slate-700 text-slate-300 font-semibold py-2.5 rounded-xl text-sm">Cancel</button>
-                            <button type="submit" class="flex-1 bg-gradient-to-r from-pink-500 to-purple-600 text-white font-semibold py-2.5 rounded-xl text-sm shadow-lg shadow-pink-500/20">Unlock</button>
-                        </div>
-                    </form>
-                `;
-                modal.classList.remove('hidden');
-            }
-
-            verifyPin(userId, enteredPin) {
-                const targetUser = this.state.users.find(u => u.id === userId);
-                if (targetUser && targetUser.pin === enteredPin) {
-                    this.closeModal();
-                    this.login(userId);
-                } else {
-                    this.showModal('Incorrect PIN 🔒', 'The PIN entered is incorrect. Please try again.');
-                }
-            }
-
-            setUserPin(newPin) {
-                if (newPin.length > 0 && newPin.length !== 4) {
-                    this.showModal('Invalid PIN', 'PIN must be exactly 4 digits (or leave blank to disable).');
-                    return;
-                }
-                const u = this.state.users.find(usr => usr.id === this.currentUser.id);
-                if (u) {
-                    u.pin = newPin;
-                    this.currentUser.pin = newPin;
-                    this.syncToFirestore();
-                    this.showModal('Security Updated 🔒', newPin ? '4-digit PIN lock activated for your profile.' : 'PIN protection removed.');
-                }
-            }
-
-            login(userId) {
-                this.currentUser = this.state.users.find(u => u.id === userId);
-                const userInfoEl = document.getElementById('header-user-info');
-                const badgeEl = document.getElementById('current-user-badge');
-                if (userInfoEl) userInfoEl.classList.remove('hidden');
-                if (badgeEl && this.currentUser) badgeEl.innerText = this.currentUser.name;
-                this.navigate('dashboard');
-            }
-
-            logout() {
-                this.currentUser = null;
-                this.isCoachMode = false;
-                const userInfoEl = document.getElementById('header-user-info');
-                const subEl = document.getElementById('header-subtitle');
-                if (userInfoEl) userInfoEl.classList.add('hidden');
-                if (subEl) subEl.innerText = 'Strength Tracker';
-                this.navigate('welcome');
-            }
-
-            addNewUser(name, pin = '') {
-                if (!name || !name.trim()) return;
-                const cleanName = name.trim();
-                const newId = cleanName.toLowerCase().replace(/[^a-z0-9]/g, '_') + '_' + Math.floor(Math.random() * 1000);
-                const newUser = { id: newId, name: cleanName, joined: new Date().toISOString().split('T')[0], pin: pin };
-                this.state.users.push(newUser);
-                this.syncToFirestore();
-                this.login(newId);
-            }
-
-            addNewExercise(name, category, trackType, unit) {
-                if (!name || !name.trim()) return;
-                const cleanName = name.trim();
-                const newId = cleanName.toLowerCase().replace(/[^a-z0-9]/g, '_');
-                if (this.state.exercises.some(e => e.id === newId)) {
-                    this.showModal('Notice', 'An exercise with this name already exists.');
-                    return;
-                }
-                this.state.exercises.push({ id: newId, name: cleanName, category: category, trackType: trackType, defaultUnit: unit });
-                this.syncToFirestore();
-                this.showModal('Exercise Added! 💪', `"${cleanName}" is now available for everyone in the group.`);
-                this.navigate('dashboard');
-            }
-
-            logWorkout(exerciseId, weight, performanceValue, notes) {
-                if (performanceValue === '') {
-                    this.showModal('Missing Info', 'Please enter your reps or time completed.');
-                    return;
-                }
-
-                const userLogs = this.state.logs.filter(l => l.userId === this.currentUser.id && l.exerciseId === exerciseId);
-                
-                const numWeight = weight ? parseFloat(weight) : 0;
-                const previousMaxWeight = userLogs.length > 0 ? Math.max(...userLogs.map(l => l.weight || 0)) : 0;
-                const isPR = (previousMaxWeight > 0 && numWeight > previousMaxWeight) || (previousMaxWeight === 0 && numWeight > 0 && userLogs.length > 0);
-
-                const entry = {
-                    id: 'log_' + Date.now(),
-                    userId: this.currentUser.id,
-                    exerciseId: exerciseId,
-                    weight: numWeight,
-                    performanceValue: performanceValue,
-                    date: new Date().toISOString().split('T')[0],
-                    notes: notes || '',
-                    isPR: isPR
-                };
-
-                this.state.logs.unshift(entry);
-                this.syncToFirestore();
-                
-                if (isPR) {
-                    this.showModal('NEW PERSONAL RECORD! 🎉🏆', `Amazing job! You smashed your previous best weight!`);
-                } else {
-                    this.showModal('Success! 💪', 'Workout logged successfully!', true);
-                }
-                this.render();
-            }
-
-            pushWorkout(selectedIds, note) {
-                this.state.assignedWorkout = {
-                    date: new Date().toISOString().split('T')[0],
-                    exerciseIds: selectedIds,
-                    note: note || ''
-                };
-                this.syncToFirestore();
-                this.showModal('Workout Pushed! 🚀', 'This workout is now pinned to top for all participants.');
-                this.navigate('dashboard');
-            }
-
-            clearAssignedWorkout() {
-                this.state.assignedWorkout = { date: '', exerciseIds: [], note: '' };
-                this.syncToFirestore();
-                this.render();
-            }
-
-            logMeasurements(weight, waist, hips, thighs, arms) {
-                const entry = {
-                    id: 'meas_' + Date.now(),
-                    userId: this.currentUser.id,
-                    date: new Date().toISOString().split('T')[0],
-                    weight: weight ? parseFloat(weight) : null,
-                    waist: waist ? parseFloat(waist) : null,
-                    hips: hips ? parseFloat(hips) : null,
-                    thighs: thighs ? parseFloat(thighs) : null,
-                    arms: arms ? parseFloat(arms) : null
-                };
-                this.state.measurements.unshift(entry);
-                this.syncToFirestore();
-                this.showModal('Success! 📊', 'Body measurements recorded!', true);
-                this.navigate('dashboard');
-            }
-
-            calculatePersonalRecord(userId, exerciseId) {
-                const userLogs = this.state.logs.filter(l => l.userId === userId && l.exerciseId === exerciseId);
-                if (userLogs.length === 0) return null;
-                return userLogs.reduce((max, log) => (log.weight || 0) > (max.weight || 0) ? log : max, userLogs[0]);
-            }
-
-            showModal(title, message, autoClose = false) {
-                const modal = document.getElementById('modal-container');
-                const content = document.getElementById('modal-content');
-                if (!modal || !content) return;
-                content.innerHTML = `
-                    <h3 class="text-lg font-bold text-white mb-2">${title}</h3>
-                    <p class="text-slate-300 text-sm mb-6">${message}</p>
-                    <button onclick="app.closeModal()" class="w-full bg-gradient-to-r from-pink-500 to-purple-600 text-white font-semibold py-2.5 rounded-xl shadow-lg shadow-pink-500/20 hover:opacity-90 transition-opacity">Got it</button>
-                `;
-                modal.classList.remove('hidden');
-                if (autoClose) {
-                    setTimeout(() => this.closeModal(), 1500);
-                }
-            }
-
-            closeModal() {
-                const modal = document.getElementById('modal-container');
-                if (modal) modal.classList.add('hidden');
-            }
-
-            render() {
-                const container = document.getElementById('app-container');
-                if (!container) return;
-                
-                if (this.currentView === 'welcome') {
-                    const subEl = document.getElementById('header-subtitle');
-                    if (subEl) subEl.innerText = 'Strength Tracker';
-                    container.innerHTML = this.renderWelcomeView();
-                } else if (this.currentView === 'dashboard') {
-                    const subEl = document.getElementById('header-subtitle');
-                    if (subEl) subEl.innerText = 'Workout Hub';
-                    container.innerHTML = this.renderDashboardView();
-                } else if (this.currentView === 'coach_push') {
-                    const subEl = document.getElementById('header-subtitle');
-                    if (subEl) subEl.innerText = 'Coach Builder';
-                    container.innerHTML = this.renderCoachPushView();
-                } else if (this.currentView === 'exercise_detail') {
-                    const subEl = document.getElementById('header-subtitle');
-                    if (subEl) subEl.innerText = 'Progress Chart';
-                    container.innerHTML = this.renderExerciseDetailView();
-                    this.initChart();
-                } else if (this.currentView === 'measurements') {
-                    const subEl = document.getElementById('header-subtitle');
-                    if (subEl) subEl.innerText = 'Body Progress';
-                    container.innerHTML = this.renderMeasurementsView();
-                } else if (this.currentView === 'add_exercise') {
-                    const subEl = document.getElementById('header-subtitle');
-                    if (subEl) subEl.innerText = 'New Exercise';
-                    container.innerHTML = this.renderAddExerciseView();
-                } else if (this.currentView === 'security') {
-                    const subEl = document.getElementById('header-subtitle');
-                    if (subEl) subEl.innerText = 'Profile Security';
-                    container.innerHTML = this.renderSecurityView();
-                } else if (this.currentView === 'group_summary') {
-                    const subEl = document.getElementById('header-subtitle');
-                    if (subEl) subEl.innerText = 'Group Progress';
-                    container.innerHTML = this.renderGroupSummaryView();
-                }
-            }
-
-            renderWelcomeView() {
-                let usersHtml = this.state.users.map(u => `
-                    <button onclick="app.promptUserLogin('${u.id}')" class="w-full text-left bg-slate-800 hover:bg-slate-755 border border-slate-700/80 hover:border-pink-500/50 p-4 rounded-2xl flex items-center justify-between group transition-all shadow-sm hover:shadow-pink-500/10">
-                        <div class="flex items-center space-x-3">
-                            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-pink-500/20 to-purple-500/20 border border-pink-500/30 flex items-center justify-center text-pink-400 font-bold group-hover:scale-105 transition-transform">
-                                ${u.name.charAt(0)}
-                            </div>
-                            <div>
-                                <div class="flex items-center space-x-1.5">
-                                    <span class="font-semibold text-white block group-hover:text-pink-300 transition-colors">${u.name}</span>
-                                    ${u.pin ? `<i class="fa-solid fa-lock text-[10px] text-amber-400" title="PIN Protected"></i>` : ''}
-                                </div>
-                                <span class="text-xs text-slate-400">Member since ${u.joined}</span>
-                            </div>
-                        </div>
-                        <i class="fa-solid fa-chevron-right text-slate-500 group-hover:text-pink-400 transition-colors"></i>
-                    </button>
-                `).join('');
-
-                return `
-                    <div class="space-y-6 pt-2">
-                        <div class="text-center space-y-2 py-4">
-                            <div class="inline-flex p-3 bg-gradient-to-tr from-pink-500 to-purple-600 rounded-2xl text-white shadow-xl shadow-pink-500/20 mb-2">
-                                <i class="fa-solid fa-fire-flame-curved text-2xl"></i>
-                            </div>
-                            <h2 class="text-2xl font-bold tracking-tight">Who is lifting today?</h2>
-                            <p class="text-sm text-slate-400">Select your profile to start logging your weights.</p>
-                        </div>
-                        
-                        <div class="space-y-3">
-                            ${usersHtml}
-                        </div>
-
-                        <div class="pt-4 border-t border-slate-800">
-                            <form onsubmit="event.preventDefault(); app.addNewUser(this.newUserName.value, this.newUserPin.value);" class="space-y-3">
-                                <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider">New Participant</label>
-                                <div class="space-y-2">
-                                    <input type="text" name="newUserName" placeholder="Enter your name..." required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-pink-500">
-                                    <div class="flex space-x-2">
-                                        <input type="password" maxlength="4" name="newUserPin" placeholder="4-Digit PIN (Optional)" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-pink-500">
-                                        <button type="submit" class="bg-gradient-to-r from-pink-500 to-purple-600 text-white px-5 rounded-xl text-sm font-semibold shadow-lg shadow-pink-500/20 hover:opacity-90 transition-opacity whitespace-nowrap">
-                                            Join Group
-                                        </button>
-                                    </div>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                `;
-            }
-
-            renderDashboardView() {
-                let userLogs = this.state.logs.filter(l => l.userId === this.currentUser.id);
-                const assigned = this.state.assignedWorkout;
-                const isAssignedActive = assigned && assigned.exerciseIds && assigned.exerciseIds.length > 0;
-
-                let sortedExercises = [...this.state.exercises].sort((a, b) => {
-                    const aAssigned = isAssignedActive && assigned.exerciseIds.includes(a.id);
-                    const bAssigned = isAssignedActive && assigned.exerciseIds.includes(b.id);
-                    if (aAssigned && !bAssigned) return -1;
-                    if (!aAssigned && bAssigned) return 1;
-                    return a.name.localeCompare(b.name);
-                });
-
-                let exercisesHtml = sortedExercises.map(ex => {
-                    const lastLog = userLogs.find(l => l.exerciseId === ex.id);
-                    const isTodayFocus = isAssignedActive && assigned.exerciseIds.includes(ex.id);
-                    const pr = this.calculatePersonalRecord(this.currentUser.id, ex.id);
-                    const isTimeTracked = ex.trackType === 'time';
-
-                    return `
-                        <div class="bg-slate-800 border ${isTodayFocus ? 'border-pink-500/60 ring-1 ring-pink-500/30' : 'border-slate-700/80'} rounded-2xl p-4 space-y-3 shadow-sm hover:border-slate-600 transition-all">
-                            <div class="flex items-center justify-between">
-                                <div class="cursor-pointer flex-1" onclick="app.navigate('exercise_detail', '${ex.id}')">
-                                    <div class="flex items-center space-x-2">
-                                        <span class="text-xs font-semibold text-pink-400 uppercase tracking-wider">${ex.category}</span>
-                                        <span class="text-[10px] bg-slate-700 text-slate-300 font-medium px-2 py-0.5 rounded-full uppercase">${isTimeTracked ? 'Time Based' : 'Reps Based'}</span>
-                                        ${isTodayFocus ? `<span class="bg-gradient-to-r from-pink-500 to-purple-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">Today's Focus</span>` : ''}
-                                    </div>
-                                    <h3 class="font-bold text-white text-base hover:text-pink-300 transition-colors flex items-center">
-                                        ${ex.name} <i class="fa-solid fa-chart-line ml-2 text-xs text-slate-400"></i>
-                                    </h3>
-                                    
-                                    <!-- LAST WEIGHT & PR DISPLAY -->
-                                    <div class="mt-1 flex flex-wrap items-center gap-2 text-xs">
-                                        <div class="flex items-center space-x-1">
-                                            <i class="fa-solid fa-clock-rotate-left text-amber-400"></i>
-                                            <span class="text-slate-300 font-medium">Last:</span>
-                                            ${lastLog ? `<span class="text-pink-300 font-bold bg-pink-500/10 px-2 py-0.5 rounded-md border border-pink-500/20">${lastLog.weight ? lastLog.weight + ' lbs × ' : ''}${lastLog.performanceValue || lastLog.reps || ''}</span>` : `<span class="text-slate-500 italic">None logged</span>`}
-                                        </div>
-                                        ${pr && pr.weight ? `
-                                            <div class="flex items-center space-x-1 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md text-amber-300 font-bold text-[11px]">
-                                                <i class="fa-solid fa-trophy text-amber-400 mr-0.5"></i> PR: ${pr.weight} lbs
-                                            </div>
-                                        ` : ''}
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Quick Log Form -->
-                            <form onsubmit="event.preventDefault(); app.logWorkout('${ex.id}', this.weight ? this.weight.value : '', this.perf.value, this.notes.value);" class="bg-slate-900/60 p-3 rounded-xl border border-slate-700/50 space-y-3">
-                                <div class="grid grid-cols-2 gap-2">
-                                    <div>
-                                        <label class="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Weight (lbs/kg)</label>
-                                        <input type="number" step="0.5" name="weight" placeholder="${lastLog && lastLog.weight ? lastLog.weight : '0'}" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-pink-500">
-                                    </div>
-                                    <div>
-                                        <label class="block text-[10px] font-semibold text-slate-400 uppercase mb-1">${isTimeTracked ? 'Time (min:sec or sec)' : 'Reps'}</label>
-                                        <input type="text" name="perf" placeholder="${isTimeTracked ? 'e.g. 1:30 or 90s' : (lastLog ? lastLog.performanceValue || lastLog.reps : '0')}" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-pink-500">
-                                    </div>
-                                </div>
-                                <div class="flex items-center space-x-2">
-                                    <input type="text" name="notes" placeholder="Optional notes..." class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-pink-500">
-                                    <button type="submit" class="bg-pink-500 hover:bg-pink-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold shadow-md shadow-pink-500/20 transition-all flex items-center">
-                                        <i class="fa-solid fa-check mr-1.5"></i> Record
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    `;
-                }).join('');
-
-                return `
-                    <div class="space-y-5">
-                        <!-- Welcome & Quick Menu Grid -->
-                        <div class="bg-gradient-to-tr from-slate-800 to-slate-800/80 border border-slate-700 rounded-2xl p-4 shadow-md">
-                            <div class="flex items-center justify-between mb-3">
-                                <div>
-                                    <span class="text-xs text-slate-400 block">Session Dashboard</span>
-                                    <h2 class="text-lg font-bold text-white">Let's lift, ${this.currentUser.name}</h2>
-                                </div>
-                                <button onclick="app.navigate('security')" class="text-slate-400 hover:text-white text-xs p-2 bg-slate-700/50 rounded-xl border border-slate-600" title="Security Settings">
-                                    <i class="fa-solid fa-shield-halved"></i>
-                                </button>
-                            </div>
-                            <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-700/60">
-                                <button onclick="app.navigate('measurements')" class="bg-slate-700/70 hover:bg-slate-700 text-pink-300 border border-slate-600/80 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center transition-colors">
-                                    <i class="fa-solid fa-ruler-combined mr-1.5"></i> Body Progress
-                                </button>
-                                <button onclick="app.navigate('group_summary')" class="bg-slate-700/70 hover:bg-slate-700 text-purple-300 border border-slate-600/80 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center transition-colors">
-                                    <i class="fa-solid fa-users mr-1.5"></i> Group Roster
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Coach's Assigned Workout Broadcast Banner -->
-                        ${isAssignedActive ? `
-                            <div class="bg-gradient-to-r from-purple-900/40 to-pink-900/40 border border-pink-500/40 p-4 rounded-2xl space-y-2">
-                                <div class="flex items-center justify-between">
-                                    <span class="text-xs font-bold text-pink-400 uppercase tracking-wider flex items-center">
-                                        <i class="fa-solid fa-bullhorn mr-1.5"></i> Coach's Workout for Today
-                                    </span>
-                                    ${this.isCoachMode ? `<button onclick="app.clearAssignedWorkout()" class="text-xs text-slate-400 hover:text-red-400">Clear</button>` : ''}
-                                </div>
-                                <p class="text-sm font-semibold text-white">${assigned.note || 'Focus on these target lifts for today\'s session!'}</p>
-                            </div>
-                        ` : ''}
-
-                        <!-- Coach Action Bar -->
-                        ${this.isCoachMode ? `
-                            <div class="bg-amber-500/10 border border-amber-500/30 p-3 rounded-xl flex items-center justify-between">
-                                <div class="flex items-center space-x-2 text-xs text-amber-300 font-semibold">
-                                    <i class="fa-solid fa-crown text-amber-400"></i>
-                                    <span>Coach Portal Active</span>
-                                </div>
-                                <button onclick="app.navigate('coach_push')" class="bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold px-3 py-1.5 rounded-lg text-xs transition-colors">
-                                    <i class="fa-solid fa-paper-plane mr-1"></i> Push Today's Workout
-                                </button>
-                            </div>
-                        ` : ''}
-
-                        <!-- Exercises Header -->
-                        <div class="flex items-center justify-between">
-                            <h3 class="font-bold text-slate-200 text-sm uppercase tracking-wider">Exercises (${this.state.exercises.length})</h3>
-                            <button onclick="app.navigate('add_exercise')" class="text-xs text-pink-400 hover:text-pink-300 font-semibold flex items-center bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-lg">
-                                <i class="fa-solid fa-plus mr-1"></i> Add Exercise
-                            </button>
-                        </div>
-
-                        <!-- Exercise Cards List -->
-                        <div class="space-y-4">
-                            ${exercisesHtml}
-                        </div>
-                    </div>
-                `;
-            }
-
-            renderCoachPushView() {
-                const assigned = this.state.assignedWorkout || {};
-                const currentSelected = assigned.exerciseIds || [];
-
-                let checkboxesHtml = this.state.exercises.map(ex => {
-                    const isChecked = currentSelected.includes(ex.id) ? 'checked' : '';
-                    return `
-                        <label class="flex items-center space-x-3 bg-slate-800 border border-slate-700/70 p-3 rounded-xl cursor-pointer hover:border-pink-500/50 transition-colors">
-                            <input type="checkbox" name="selectedEx" value="${ex.id}" ${isChecked} class="w-4 h-4 accent-pink-500 rounded">
-                            <div>
-                                <span class="font-bold text-white text-sm block">${ex.name}</span>
-                                <span class="text-xs text-slate-400">${ex.category} • ${ex.trackType === 'time' ? 'Time-based' : 'Reps-based'}</span>
-                            </div>
-                        </label>
-                    `;
-                }).join('');
-
-                return `
-                    <div class="space-y-6">
-                        <button onclick="app.navigate('dashboard')" class="text-xs text-slate-400 hover:text-white flex items-center">
-                            <i class="fa-solid fa-arrow-left mr-1.5"></i> Back to Dashboard
-                        </button>
-
-                        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-4 space-y-2">
-                            <div class="flex items-center space-x-2">
-                                <i class="fa-solid fa-crown text-amber-400"></i>
-                                <h2 class="text-lg font-bold text-white">Push Today's Workout</h2>
-                            </div>
-                            <p class="text-xs text-slate-400">Select exercises for today's session. They will be highlighted and pinned to the top of everyone's app.</p>
-                        </div>
-
-                        <form onsubmit="event.preventDefault(); const selected = Array.from(this.querySelectorAll('input[name=selectedEx]:checked')).map(cb => cb.value); app.pushWorkout(selected, this.coachNote.value);" class="space-y-4">
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Coach's Message / Focus Notes</label>
-                                <input type="text" name="coachNote" value="${assigned.note || ''}" placeholder="e.g. Heavy Lower Body focus! 3 sets each." class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-pink-500">
-                            </div>
-
-                            <div class="space-y-2">
-                                <label class="block text-xs font-semibold text-slate-400 uppercase">Select Exercises for Today</label>
-                                <div class="space-y-2 max-h-96 overflow-y-auto pr-1">
-                                    ${checkboxesHtml}
-                                </div>
-                            </div>
-
-                            <button type="submit" class="w-full bg-gradient-to-r from-amber-500 to-pink-500 text-slate-900 font-bold py-3 rounded-xl text-sm shadow-lg hover:opacity-90 transition-opacity">
-                                <i class="fa-solid fa-paper-plane mr-2"></i> Broadcast Workout to Group
-                            </button>
-                        </form>
-                    </div>
-                `;
-            }
-
-            renderExerciseDetailView() {
-                const ex = this.state.exercises.find(e => e.id === this.selectedExerciseId);
-                if (!ex) {
-                    return `<div class="p-6 text-center"><p class="text-slate-400 mb-4">Exercise not found.</p><button onclick="app.navigate('dashboard')" class="bg-pink-500 text-white px-4 py-2 rounded-xl text-sm">Back to Dashboard</button></div>`;
-                }
-                const userLogs = this.state.logs.filter(l => l.userId === this.currentUser.id && l.exerciseId === ex.id);
-
-                let historyHtml = userLogs.length === 0 ? 
-                    `<p class="text-xs text-slate-400 text-center py-4">No logged history for this exercise yet.</p>` :
-                    userLogs.map(l => `
-                        <div class="bg-slate-800 border ${l.isPR ? 'border-amber-500/50 bg-amber-500/5' : 'border-slate-700/60'} rounded-xl p-3 flex items-center justify-between text-sm">
-                            <div>
-                                <div class="flex items-center space-x-2">
-                                    <span class="font-bold text-white">${l.weight ? l.weight + ' lbs × ' : ''}${l.performanceValue || l.reps || ''}</span>
-                                    ${l.isPR ? `<span class="text-[10px] bg-amber-500/20 text-amber-300 font-bold px-1.5 py-0.5 rounded">PR</span>` : ''}
-                                </div>
-                                <span class="text-xs text-slate-400 block">${l.date} ${l.notes ? '• ' + l.notes : ''}</span>
-                            </div>
-                        </div>
-                    `).join('');
-
-                return `
-                    <div class="space-y-6">
-                        <button onclick="app.navigate('dashboard')" class="text-xs text-slate-400 hover:text-white flex items-center">
-                            <i class="fa-solid fa-arrow-left mr-1.5"></i> Back to Exercises
-                        </button>
-
-                        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-4 space-y-2">
-                            <span class="text-xs font-semibold text-pink-400 uppercase tracking-wider">${ex.category} • ${ex.trackType === 'time' ? 'Time Tracked' : 'Rep Tracked'}</span>
-                            <h2 class="text-xl font-bold text-white">${ex.name}</h2>
-                            <p class="text-xs text-slate-400">Progress chart showing your performance over time.</p>
-                        </div>
-
-                        <!-- Chart Container -->
-                        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-4">
-                            <div class="h-64 relative">
-                                <canvas id="progressChart"></canvas>
-                            </div>
-                        </div>
-
-                        <!-- History Section -->
-                        <div class="space-y-3">
-                            <h3 class="font-bold text-slate-300 text-sm uppercase tracking-wider">Workout History</h3>
-                            <div class="space-y-2">
-                                ${historyHtml}
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }
-
-            initChart() {
-                const ex = this.state.exercises.find(e => e.id === this.selectedExerciseId);
-                if (!ex) return;
-                const userLogs = this.state.logs
-                    .filter(l => l.userId === this.currentUser.id && l.exerciseId === ex.id)
-                    .sort((a, b) => new Date(a.date) - new Date(b.date));
-
-                const canvasEl = document.getElementById('progressChart');
-                if (!canvasEl) return;
-                const ctx = canvasEl.getContext('2d');
-                
-                if (this._chartInstance) {
-                    this._chartInstance.destroy();
-                }
-
-                const labels = userLogs.map(l => l.date);
-                const data = userLogs.map(l => l.weight || parseFloat(l.performanceValue) || 0);
-
-                this._chartInstance = new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: labels,
-                        datasets: [{
-                            label: `Weight / Value`,
-                            data: data,
-                            borderColor: '#ec4899',
-                            backgroundColor: 'rgba(236, 72, 153, 0.1)',
-                            borderWidth: 3,
-                            fill: true,
-                            tension: 0.3,
-                            pointBackgroundColor: '#ec4899',
-                            pointRadius: 4
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: { legend: { display: false } },
-                        scales: {
-                            x: {
-                                grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                                ticks: { color: '#94a3b8', font: { size: 10 } }
-                            },
-                            y: {
-                                grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                                ticks: { color: '#94a3b8', font: { size: 10 } }
-                            }
-                        }
-                    }
-                });
-            }
-
-            renderMeasurementsView() {
-                let userMeasurements = this.state.measurements.filter(m => m.userId === this.currentUser.id);
-                
-                let historyHtml = userMeasurements.length === 0 ?
-                    `<p class="text-xs text-slate-400 text-center py-4">No measurements recorded yet.</p>` :
-                    userMeasurements.map(m => `
-                        <div class="bg-slate-800 border border-slate-700/60 rounded-xl p-3 space-y-1 text-sm">
-                            <div class="flex justify-between font-bold text-white border-b border-slate-700/50 pb-1">
-                                <span>${m.date}</span>
-                                <span>${m.weight ? m.weight + ' lbs' : ''}</span>
-                            </div>
-                            <div class="grid grid-cols-4 gap-2 pt-1 text-xs text-slate-300">
-                                ${m.waist ? `<div>Waist: <span class="text-pink-400 font-semibold">${m.waist}"</span></div>` : ''}
-                                ${m.hips ? `<div>Hips: <span class="text-pink-400 font-semibold">${m.hips}"</span></div>` : ''}
-                                ${m.thighs ? `<div>Thighs: <span class="text-pink-400 font-semibold">${m.thighs}"</span></div>` : ''}
-                                ${m.arms ? `<div>Arms: <span class="text-pink-400 font-semibold">${m.arms}"</span></div>` : ''}
-                            </div>
-                        </div>
-                    `).join('');
-
-                return `
-                    <div class="space-y-6">
-                        <button onclick="app.navigate('dashboard')" class="text-xs text-slate-400 hover:text-white flex items-center">
-                            <i class="fa-solid fa-arrow-left mr-1.5"></i> Back to Dashboard
-                        </button>
-
-                        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-4">
-                            <h2 class="text-lg font-bold text-white mb-1">Body Measurements</h2>
-                            <p class="text-xs text-slate-400 mb-4">Optional tracking to monitor physical body progress over time.</p>
-                            
-                            <form onsubmit="event.preventDefault(); app.logMeasurements(this.weight.value, this.waist.value, this.hips.value, this.thighs.value, this.arms.value);" class="space-y-3">
-                                <div class="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label class="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Body Weight (lbs)</label>
-                                        <input type="number" step="0.1" name="weight" placeholder="150" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-pink-500">
-                                    </div>
-                                    <div>
-                                        <label class="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Waist (in)</label>
-                                        <input type="number" step="0.1" name="waist" placeholder="30" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-pink-500">
-                                    </div>
-                                    <div>
-                                        <label class="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Hips (in)</label>
-                                        <input type="number" step="0.1" name="hips" placeholder="40" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-pink-500">
-                                    </div>
-                                    <div>
-                                        <label class="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Thighs (in)</label>
-                                        <input type="number" step="0.1" name="thighs" placeholder="22" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-pink-500">
-                                    </div>
-                                </div>
-                                <div>
-                                    <label class="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Arms (in)</label>
-                                    <input type="number" step="0.1" name="arms" placeholder="12" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-pink-500">
-                                </div>
-                                <button type="submit" class="w-full bg-gradient-to-r from-pink-500 to-purple-600 text-white font-semibold py-2.5 rounded-xl text-sm shadow-lg shadow-pink-500/20 hover:opacity-90 transition-opacity">
-                                    Save Measurements
-                                </button>
-                            </form>
-                        </div>
-
-                        <div class="space-y-3">
-                            <h3 class="font-bold text-slate-300 text-sm uppercase tracking-wider">Measurement History</h3>
-                            <div class="space-y-2">
-                                ${historyHtml}
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }
-
-            renderSecurityView() {
-                const currentPin = this.currentUser.pin || '';
-                return `
-                    <div class="space-y-6">
-                        <button onclick="app.navigate('dashboard')" class="text-xs text-slate-400 hover:text-white flex items-center">
-                            <i class="fa-solid fa-arrow-left mr-1.5"></i> Back to Dashboard
-                        </button>
-
-                        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-4 space-y-4">
-                            <div>
-                                <h2 class="text-lg font-bold text-white flex items-center">
-                                    <i class="fa-solid fa-shield-halved text-pink-400 mr-2"></i> Profile Security
-                                </h2>
-                                <p class="text-xs text-slate-400 mt-1">Set an optional 4-digit PIN to prevent others from accessing your profile or body measurements.</p>
-                            </div>
-
-                            <form onsubmit="event.preventDefault(); app.setUserPin(this.pin.value);" class="space-y-4">
-                                <div>
-                                    <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">4-Digit PIN Lock</label>
-                                    <input type="password" maxlength="4" name="pin" value="${currentPin}" placeholder="Leave blank to disable" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-center text-lg tracking-widest text-white focus:outline-none focus:border-pink-500">
-                                </div>
-                                <button type="submit" class="w-full bg-gradient-to-r from-pink-500 to-purple-600 text-white font-semibold py-2.5 rounded-xl text-sm shadow-lg shadow-pink-500/20 hover:opacity-90 transition-opacity">
-                                    ${currentPin ? 'Update PIN' : 'Enable PIN Protection'}
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                `;
-            }
-
-            renderGroupSummaryView() {
-                const today = new Date().toISOString().split('T')[0];
-
-                let membersHtml = this.state.users.map(u => {
-                    const uLogs = this.state.logs.filter(l => l.userId === u.id);
-                    const loggedToday = uLogs.some(l => l.date === today);
-                    const totalLifts = uLogs.length;
-
-                    return `
-                        <div class="bg-slate-800 border border-slate-700/80 p-3.5 rounded-xl flex items-center justify-between">
-                            <div class="flex items-center space-x-3">
-                                <div class="w-9 h-9 rounded-lg bg-pink-500/20 border border-pink-500/30 text-pink-400 flex items-center justify-center font-bold text-sm">
-                                    ${u.name.charAt(0)}
-                                </div>
-                                <div>
-                                    <span class="font-bold text-white text-sm block">${u.name}</span>
-                                    <span class="text-xs text-slate-400">${totalLifts} total set${totalLifts === 1 ? '' : 's'} recorded</span>
-                                </div>
-                            </div>
-                            <div>
-                                ${loggedToday ? 
-                                    `<span class="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[11px] font-bold px-2 py-1 rounded-md flex items-center"><i class="fa-solid fa-circle-check mr-1"></i> Active Today</span>` :
-                                    `<span class="bg-slate-700 text-slate-400 text-[11px] font-medium px-2 py-1 rounded-md">Resting</span>`
-                                }
-                            </div>
-                        </div>
-                    `;
-                }).join('');
-
-                return `
-                    <div class="space-y-6">
-                        <button onclick="app.navigate('dashboard')" class="text-xs text-slate-400 hover:text-white flex items-center">
-                            <i class="fa-solid fa-arrow-left mr-1.5"></i> Back to Dashboard
-                        </button>
-
-                        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-4 space-y-1">
-                            <h2 class="text-lg font-bold text-white flex items-center">
-                                <i class="fa-solid fa-users text-purple-400 mr-2"></i> Group Roster & Activity
-                            </h2>
-                            <p class="text-xs text-slate-400">See who is active in today's training session.</p>
-                        </div>
-
-                        <div class="space-y-2">
-                            ${membersHtml}
-                        </div>
-                    </div>
-                `;
-            }
-
-            renderAddExerciseView() {
-                return `
-                    <div class="space-y-6">
-                        <button onclick="app.navigate('dashboard')" class="text-xs text-slate-400 hover:text-white flex items-center">
-                            <i class="fa-solid fa-arrow-left mr-1.5"></i> Back to Dashboard
-                        </button>
-
-                        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-4">
-                            <h2 class="text-lg font-bold text-white mb-1">Add Custom Exercise</h2>
-                            <p class="text-xs text-slate-400 mb-4">Add a new movement to your group's routine.</p>
-
-                            <form onsubmit="event.preventDefault(); app.addNewExercise(this.exName.value, this.exCategory.value, this.exTrackType.value, this.exUnit.value);" class="space-y-4">
-                                <div>
-                                    <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Exercise Name</label>
-                                    <input type="text" name="exName" placeholder="e.g. Kettlebell Halo" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-pink-500">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Category</label>
-                                    <select name="exCategory" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-pink-500">
-                                        <option value="Lower Body">Lower Body</option>
-                                        <option value="Upper Body">Upper Body</option>
-                                        <option value="Full Body">Full Body</option>
-                                        <option value="Core">Core</option>
-                                        <option value="Cardio/Monostructural">Cardio/Monostructural</option>
-                                        <option value="Gymnastics/Core">Gymnastics/Core</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Tracking Format</label>
-                                    <select name="exTrackType" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-pink-500">
-                                        <option value="reps">Reps-based (e.g., 10 reps @ 135 lbs)</option>
-                                        <option value="time">Time-based (e.g., 60 seconds @ 50 lbs)</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Default Weight Unit</label>
-                                    <select name="exUnit" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-pink-500">
-                                        <option value="lbs">lbs</option>
-                                        <option value="kg">kg</option>
-                                        <option value="N/A">Bodyweight / No Weight</option>
-                                    </select>
-                                </div>
-                                <button type="submit" class="w-full bg-gradient-to-r from-pink-500 to-purple-600 text-white font-semibold py-2.5 rounded-xl text-sm shadow-lg shadow-pink-500/20 hover:opacity-90 transition-opacity">
-                                    Save Exercise
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                `;
-            }
+        if (!localStorage.getItem('lrl_exercises')) {
+          localStorage.setItem('lrl_exercises', JSON.stringify(DEFAULT_EXERCISES));
         }
+        if (!localStorage.getItem('lrl_logs')) {
+          localStorage.setItem('lrl_logs', JSON.stringify([]));
+        }
+        if (!localStorage.getItem('lrl_metrics')) {
+          localStorage.setItem('lrl_metrics', JSON.stringify([]));
+        }
+      }
 
-        // Initialize application properly on load
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => { window.app = new App(); });
+      getUsers() { return JSON.parse(localStorage.getItem('lrl_users') || '[]'); }
+      getExercises() { return JSON.parse(localStorage.getItem('lrl_exercises') || '[]'); }
+      getLogs() { return JSON.parse(localStorage.getItem('lrl_logs') || '[]'); }
+      getMetrics() { return JSON.parse(localStorage.getItem('lrl_metrics') || '[]'); }
+      getCoachWorkout() { return JSON.parse(localStorage.getItem('lrl_coach_workout') || 'null'); }
+
+      renderUserDropdown() {
+        const users = this.getUsers();
+        const select = document.getElementById('user-dropdown');
+        select.innerHTML = '<option value="">-- Choose Your Name --</option>';
+        users.forEach(u => {
+          select.innerHTML += `<option value="${u.id}">${u.name} ${u.pin ? '🔒' : ''}</option>`;
+        });
+      }
+
+      loginSelectedUser() {
+        const userId = document.getElementById('user-dropdown').value;
+        if (!userId) return alert('Please select a name.');
+        
+        const user = this.getUsers().find(u => u.id === userId);
+        if (user.pin) {
+          this.selectedUserForPin = user;
+          document.getElementById('modal-pin').classList.remove('hidden');
         } else {
-            window.app = new App();
+          this.setUserSession(user);
         }
-    </script>
+      }
+
+      verifyPin() {
+        const enteredPin = document.getElementById('pin-input').value;
+        if (enteredPin === this.selectedUserForPin.pin) {
+          document.getElementById('modal-pin').classList.add('hidden');
+          document.getElementById('pin-input').value = '';
+          this.setUserSession(this.selectedUserForPin);
+        } else {
+          alert('Incorrect PIN!');
+        }
+      }
+
+      closePinModal() {
+        document.getElementById('modal-pin').classList.add('hidden');
+        document.getElementById('pin-input').value = '';
+      }
+
+      setUserSession(user) {
+        this.currentUser = user;
+        document.getElementById('current-user-display').innerText = `Active: ${user.name}`;
+        this.showDashboard();
+      }
+
+      switchUser() {
+        this.currentUser = null;
+        document.getElementById('current-user-display').innerText = 'Selecting Profile...';
+        this.hideAllViews();
+        document.getElementById('view-user-select').classList.remove('hidden');
+      }
+
+      hideAllViews() {
+        ['view-user-select', 'view-dashboard', 'view-exercise-detail', 'view-coach', 'view-roster'].forEach(id => {
+          document.getElementById(id).classList.add('hidden');
+        });
+      }
+
+      showDashboard() {
+        if (!this.currentUser) return this.switchUser();
+        this.hideAllViews();
+        document.getElementById('view-dashboard').classList.remove('hidden');
+        this.renderCoachBanner();
+        this.renderExerciseList();
+      }
+
+      renderCoachBanner() {
+        const workout = this.getCoachWorkout();
+        const banner = document.getElementById('coach-daily-workout-banner');
+        if (workout && workout.title) {
+          banner.classList.remove('hidden');
+          document.getElementById('coach-workout-date').innerText = workout.date || 'Today';
+          document.getElementById('coach-workout-title').innerText = workout.title;
+          document.getElementById('coach-workout-notes').innerText = workout.notes || '';
+        } else {
+          banner.classList.add('hidden');
+        }
+      }
+
+      renderExerciseList() {
+        const exercises = this.getExercises();
+        const logs = this.getLogs().filter(l => l.userId === this.currentUser.id);
+        const coachWorkout = this.getCoachWorkout();
+        const highlightedIds = coachWorkout ? (coachWorkout.exerciseIds || []) : [];
+
+        // Sort highlighted exercises to top
+        const sorted = [...exercises].sort((a, b) => {
+          const aHigh = highlightedIds.includes(a.id) ? 1 : 0;
+          const bHigh = highlightedIds.includes(b.id) ? 1 : 0;
+          return bHigh - aHigh;
+        });
+
+        const container = document.getElementById('exercise-list-container');
+        container.innerHTML = '';
+
+        sorted.forEach(ex => {
+          const userExLogs = logs.filter(l => l.exerciseId === ex.id);
+          const lastLog = userExLogs[userExLogs.length - 1];
+          const isHighlighted = highlightedIds.includes(ex.id);
+
+          const card = document.createElement('div');
+          card.className = `bg-slate-800 border p-4 rounded-xl flex flex-col justify-between space-y-3 ${isHighlighted ? 'border-pink-500/80 shadow-md shadow-pink-950/20' : 'border-slate-700'}`;
+          
+          card.innerHTML = `
+            <div class="flex justify-between items-start cursor-pointer" onclick="app.showExerciseDetail('${ex.id}')">
+              <div>
+                <div class="flex items-center space-x-2">
+                  <h3 class="font-bold text-slate-100 text-sm hover:text-pink-400 transition">${ex.name}</h3>
+                  ${isHighlighted ? '<span class="bg-pink-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">FOCUS</span>' : ''}
+                </div>
+                <p class="text-xs text-slate-400">${ex.category} • <span class="capitalize">${ex.type}</span></p>
+              </div>
+              <span class="text-xs text-pink-400 font-semibold">Charts →</span>
+            </div>
+
+            <div class="bg-slate-900/60 p-2.5 rounded-lg flex items-center justify-between space-x-2">
+              <div class="text-xs text-slate-400">
+                <span>Last: </span>
+                <span class="text-slate-200 font-bold">${lastLog ? `${lastLog.weight}lbs (${lastLog.val})` : 'None yet'}</span>
+              </div>
+              
+              <div class="flex items-center space-x-1.5">
+                <input type="number" id="input-w-${ex.id}" placeholder="lbs" class="w-16 bg-slate-800 border border-slate-700 text-xs p-1.5 rounded text-slate-100 text-center">
+                <input type="text" id="input-v-${ex.id}" placeholder="${ex.type === 'time' ? 'min:sec' : 'reps'}" class="w-20 bg-slate-800 border border-slate-700 text-xs p-1.5 rounded text-slate-100 text-center">
+                <button onclick="app.quickLogSet('${ex.id}')" class="bg-pink-600 hover:bg-pink-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg">
+                  Record
+                </button>
+              </div>
+            </div>
+          `;
+          container.appendChild(card);
+        });
+      }
+
+      quickLogSet(exId) {
+        const weightInput = document.getElementById(`input-w-${exId}`).value;
+        const valInput = document.getElementById(`input-v-${exId}`).value;
+
+        if (!weightInput || !valInput) return alert('Please enter both weight and reps/time.');
+
+        const newLog = {
+          id: 'log_' + Date.now(),
+          userId: this.currentUser.id,
+          exerciseId: exId,
+          weight: parseFloat(weightInput),
+          val: valInput,
+          date: new Date().toLocaleDateString()
+        };
+
+        const logs = this.getLogs();
+        logs.push(newLog);
+        localStorage.setItem('lrl_logs', JSON.stringify(logs));
+
+        document.getElementById(`input-w-${exId}`).value = '';
+        document.getElementById(`input-v-${exId}`).value = '';
+
+        this.renderExerciseList();
+        alert('Set recorded successfully! 🎉');
+      }
+
+      showExerciseDetail(exId) {
+        this.activeExercise = this.getExercises().find(e => e.id === exId);
+        this.hideAllViews();
+        document.getElementById('view-exercise-detail').classList.remove('hidden');
+
+        document.getElementById('detail-exercise-title').innerText = this.activeExercise.name;
+        document.getElementById('detail-exercise-category').innerText = `${this.activeExercise.category} (${this.activeExercise.type})`;
+
+        this.renderExerciseDetailChartAndLogs();
+      }
+
+      renderExerciseDetailChartAndLogs() {
+        const logs = this.getLogs().filter(l => l.userId === this.currentUser.id && l.exerciseId === this.activeExercise.id);
+        
+        // Find PR
+        const weights = logs.map(l => l.weight);
+        const maxWeight = weights.length ? Math.max(...weights) : 0;
+        document.getElementById('detail-exercise-pr').innerText = `PR: ${maxWeight} lbs`;
+
+        // Render History List
+        const listContainer = document.getElementById('exercise-history-list');
+        listContainer.innerHTML = logs.length ? '' : '<p class="text-slate-500 italic">No logs recorded for this exercise yet.</p>';
+        
+        logs.slice().reverse().forEach(l => {
+          listContainer.innerHTML += `
+            <div class="flex justify-between border-b border-slate-700/50 pb-1.5">
+              <span>${l.date}</span>
+              <span class="font-bold text-pink-400">${l.weight} lbs × ${l.val}</span>
+            </div>
+          `;
+        });
+
+        // Render Chart
+        const ctx = document.getElementById('progressChart').getContext('2d');
+        if (this.chartInstance) this.chartInstance.destroy();
+
+        this.chartInstance = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: logs.map(l => l.date),
+            datasets: [{
+              label: 'Weight Lifted (lbs)',
+              data: logs.map(l => l.weight),
+              borderColor: '#ec4899',
+              backgroundColor: 'rgba(236, 72, 153, 0.1)',
+              fill: true,
+              tension: 0.3
+            }]
+          },
+          options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { ticks: { color: '#94a3b8' }, grid: { display: false } },
+              y: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } }
+            }
+          }
+        });
+      }
+
+      logCurrentExerciseDetail() {
+        const weight = document.getElementById('detail-input-weight').value;
+        const val = document.getElementById('detail-input-val').value;
+        if (!weight || !val) return alert('Please enter both weight and reps/time.');
+
+        const logs = this.getLogs();
+        logs.push({
+          id: 'log_' + Date.now(),
+          userId: this.currentUser.id,
+          exerciseId: this.activeExercise.id,
+          weight: parseFloat(weight),
+          val: val,
+          date: new Date().toLocaleDateString()
+        });
+        localStorage.setItem('lrl_logs', JSON.stringify(logs));
+
+        document.getElementById('detail-input-weight').value = '';
+        document.getElementById('detail-input-val').value = '';
+
+        this.renderExerciseDetailChartAndLogs();
+      }
+
+      showCoachPortal() {
+        this.hideAllViews();
+        document.getElementById('view-coach').classList.remove('hidden');
+
+        // Populate Exercise Checkboxes
+        const exercises = this.getExercises();
+        const selector = document.getElementById('coach-exercise-selector');
+        selector.innerHTML = '';
+        exercises.forEach(ex => {
+          selector.innerHTML += `
+            <label class="flex items-center space-x-2 cursor-pointer py-1">
+              <input type="checkbox" value="${ex.id}" class="coach-ex-checkbox rounded text-pink-600 focus:ring-pink-500">
+              <span class="text-slate-200">${ex.name}</span>
+            </label>
+          `;
+        });
+
+        // Populate Roster with DELETE buttons
+        this.renderCoachRoster();
+      }
+
+      renderCoachRoster() {
+        const users = this.getUsers();
+        const rosterContainer = document.getElementById('coach-roster-list');
+        rosterContainer.innerHTML = '';
+
+        users.forEach(u => {
+          rosterContainer.innerHTML += `
+            <div class="flex justify-between items-center bg-slate-900/80 p-2.5 rounded-lg border border-slate-700">
+              <div>
+                <span class="font-bold text-slate-100">${u.name}</span>
+                <span class="text-[10px] text-slate-400 ml-1">${u.pin ? '🔒 PIN Set' : '🔓 No PIN'}</span>
+              </div>
+              <button onclick="app.deleteUser('${u.id}', '${u.name}')" class="bg-red-900/60 hover:bg-red-700 text-red-200 border border-red-500/40 text-[11px] px-2.5 py-1 rounded-md font-semibold transition">
+                🗑️ Delete
+              </button>
+            </div>
+          `;
+        });
+      }
+
+      deleteUser(userId, userName) {
+        if (!confirm(`Are you sure you want to delete ${userName}'s profile and remove them from the roster?`)) return;
+
+        // Delete user
+        const users = this.getUsers().filter(u => u.id !== userId);
+        localStorage.setItem('lrl_users', JSON.stringify(users));
+
+        // Delete logs for that user
+        const logs = this.getLogs().filter(l => l.userId !== userId);
+        localStorage.setItem('lrl_logs', JSON.stringify(logs));
+
+        // Refresh lists and dropdowns
+        this.renderCoachRoster();
+        this.renderUserDropdown();
+
+        // If active user was deleted, reset
+        if (this.currentUser && this.currentUser.id === userId) {
+          this.switchUser();
+        }
+
+        alert(`${userName} was deleted successfully.`);
+      }
+
+      clearAllDemoData() {
+        if (!confirm('This will wipe out all profiles and logs so you can start with a clean slate. Continue?')) return;
+
+        localStorage.removeItem('lrl_users');
+        localStorage.removeItem('lrl_logs');
+        localStorage.removeItem('lrl_metrics');
+        
+        this.initStorage();
+        this.renderUserDropdown();
+        this.switchUser();
+        alert('All demo data cleared!');
+      }
+
+      publishCoachWorkout() {
+        const title = document.getElementById('coach-title-input').value;
+        const notes = document.getElementById('coach-notes-input').value;
+        const checkedBoxes = document.querySelectorAll('.coach-ex-checkbox:checked');
+        const selectedIds = Array.from(checkedBoxes).map(cb => cb.value);
+
+        if (!title) return alert('Please enter a workout title.');
+
+        const coachWorkout = {
+          title,
+          notes,
+          exerciseIds: selectedIds,
+          date: new Date().toLocaleDateString()
+        };
+
+        localStorage.setItem('lrl_coach_workout', JSON.stringify(coachWorkout));
+        alert('Workout published to group!');
+        this.showDashboard();
+      }
+
+      showRoster() {
+        this.hideAllViews();
+        document.getElementById('view-roster').classList.remove('hidden');
+
+        const users = this.getUsers();
+        const logs = this.getLogs();
+        const container = document.getElementById('group-roster-cards');
+        container.innerHTML = '';
+
+        users.forEach(u => {
+          const userLogs = logs.filter(l => l.userId === u.id);
+          container.innerHTML += `
+            <div class="bg-slate-800 border border-slate-700 p-3 rounded-xl flex justify-between items-center">
+              <div>
+                <h4 class="font-bold text-slate-100">${u.name}</h4>
+                <p class="text-slate-400 text-[11px]">${userLogs.length} total sets logged</p>
+              </div>
+              <span class="bg-pink-900/40 text-pink-300 border border-pink-500/30 text-[10px] font-bold px-2 py-1 rounded-full">
+                Active
+              </span>
+            </div>
+          `;
+        });
+      }
+
+      setDashboardTab(tab) {
+        this.activeTab = tab;
+        if (tab === 'measurements') {
+          document.getElementById('exercise-list-container').classList.add('hidden');
+          document.getElementById('measurements-container').classList.remove('hidden');
+          document.getElementById('tab-measurements').className = 'text-xs font-bold px-3 py-1.5 rounded-lg bg-pink-600 text-white';
+          document.getElementById('tab-all').className = 'text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-800 text-slate-400';
+          this.renderMetricsHistory();
+        } else {
+          document.getElementById('measurements-container').classList.add('hidden');
+          document.getElementById('exercise-list-container').classList.remove('hidden');
+          document.getElementById('tab-all').className = 'text-xs font-bold px-3 py-1.5 rounded-lg bg-pink-600 text-white';
+          document.getElementById('tab-measurements').className = 'text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-800 text-slate-400';
+        }
+      }
+
+      saveMetrics() {
+        const weight = document.getElementById('metric-weight').value;
+        const waist = document.getElementById('metric-waist').value;
+        if (!weight && !waist) return alert('Enter at least one metric.');
+
+        const metrics = this.getMetrics();
+        metrics.push({
+          id: 'm_' + Date.now(),
+          userId: this.currentUser.id,
+          weight: weight ? parseFloat(weight) : null,
+          waist: waist ? parseFloat(waist) : null,
+          date: new Date().toLocaleDateString()
+        });
+
+        localStorage.setItem('lrl_metrics', JSON.stringify(metrics));
+        document.getElementById('metric-weight').value = '';
+        document.getElementById('metric-waist').value = '';
+        this.renderMetricsHistory();
+        alert('Metrics saved!');
+      }
+
+      renderMetricsHistory() {
+        const metrics = this.getMetrics().filter(m => m.userId === this.currentUser.id);
+        const container = document.getElementById('metrics-history-list');
+        container.innerHTML = metrics.length ? '' : '<p class="text-slate-500 italic">No metrics recorded yet.</p>';
+
+        metrics.slice().reverse().forEach(m => {
+          container.innerHTML += `
+            <div class="flex justify-between border-b border-slate-700/50 pb-1">
+              <span>${m.date}</span>
+              <span class="font-bold text-pink-400">
+                ${m.weight ? `${m.weight} lbs` : ''} ${m.waist ? `• ${m.waist} in waist` : ''}
+              </span>
+            </div>
+          `;
+        });
+      }
+
+      showAddUserModal() { document.getElementById('modal-add-user').classList.remove('hidden'); }
+      closeAddUserModal() { document.getElementById('modal-add-user').classList.add('hidden'); }
+
+      createUserProfile() {
+        const name = document.getElementById('new-user-name').value.trim();
+        const pin = document.getElementById('new-user-pin').value.trim();
+        if (!name) return alert('Please enter a name.');
+
+        const users = this.getUsers();
+        users.push({ id: 'u_' + Date.now(), name, pin });
+        localStorage.setItem('lrl_users', JSON.stringify(users));
+
+        document.getElementById('new-user-name').value = '';
+        document.getElementById('new-user-pin').value = '';
+        this.closeAddUserModal();
+        this.renderUserDropdown();
+        if (!document.getElementById('view-coach').classList.contains('hidden')) {
+          this.renderCoachRoster();
+        }
+      }
+
+      showCustomExerciseModal() { document.getElementById('modal-add-exercise').classList.remove('hidden'); }
+      closeCustomExerciseModal() { document.getElementById('modal-add-exercise').classList.add('hidden'); }
+
+      saveCustomExercise() {
+        const name = document.getElementById('custom-ex-name').value.trim();
+        const category = document.getElementById('custom-ex-category').value;
+        const type = document.getElementById('custom-ex-type').value;
+        if (!name) return alert('Enter exercise name.');
+
+        const exercises = this.getExercises();
+        exercises.push({ id: 'ex_' + Date.now(), name, category, type });
+        localStorage.setItem('lrl_exercises', JSON.stringify(exercises));
+
+        document.getElementById('custom-ex-name').value = '';
+        this.closeCustomExerciseModal();
+        this.renderExerciseList();
+      }
+
+      filterExercises() {
+        const query = document.getElementById('exercise-search').value.toLowerCase();
+        const cards = document.querySelectorAll('#exercise-list-container > div');
+        cards.forEach(card => {
+          const text = card.innerText.toLowerCase();
+          card.style.display = text.includes(query) ? 'flex' : 'none';
+        });
+      }
+    }
+
+    // Launch App
+    let app;
+    document.addEventListener('DOMContentLoaded', () => {
+      app = new App();
+    });
+  </script>
 </body>
 </html>
