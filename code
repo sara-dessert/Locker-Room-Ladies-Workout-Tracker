@@ -51,16 +51,19 @@
         </div>
     </div>
 
-    <!-- Firebase Modules -->
+    <!-- Firebase & App Modules -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'iron-sisters-app';
-        let firebaseConfig;
+        let firebaseConfig = null;
+        
         try {
-            firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+            if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+                firebaseConfig = JSON.parse(__firebase_config);
+            }
         } catch(e) {
             console.warn("Firebase configuration non-standard or missing, falling back to local memory.");
         }
@@ -156,6 +159,7 @@
                 this.auth = null;
                 this.user = null;
                 this.isCoachMode = false;
+                this._chartInstance = null;
 
                 this.state = {
                     users: [
@@ -178,32 +182,42 @@
             }
 
             async initFirebase() {
+                // First load local storage for instant render
+                this.loadLocalState();
+
                 if (firebaseConfig) {
                     try {
                         const app = initializeApp(firebaseConfig);
                         this.auth = getAuth(app);
                         this.db = getFirestore(app);
 
+                        // Mandatory Auth Before Queries rule implementation
                         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                             await signInWithCustomToken(this.auth, __initial_auth_token);
                         } else {
                             await signInAnonymously(this.auth);
                         }
 
-                        onAuthStateChanged(this.auth, (u) => {
-                            if (u) {
-                                this.user = u;
-                                this.setupRealtimeListeners();
-                            }
-                        });
+                        // Wait for currentUser to populate or auth state to settle
+                        this.user = this.auth.currentUser;
+                        if (!this.user) {
+                            await new Promise((resolve) => {
+                                const unsubscribe = onAuthStateChanged(this.auth, (u) => {
+                                    this.user = u;
+                                    unsubscribe();
+                                    resolve();
+                                });
+                            });
+                        }
+
+                        this.setupRealtimeListeners();
                     } catch (e) {
-                        console.error("Firestore initialization error, running in offline mode:", e);
-                        this.loadLocalState();
+                        console.warn("Firestore initialization error, running in local mode:", e);
+                        this.render();
                     }
                 } else {
-                    this.loadLocalState();
+                    this.render();
                 }
-                this.render();
             }
 
             loadLocalState() {
@@ -224,9 +238,14 @@
             }
 
             setupRealtimeListeners() {
-                if (!this.db) return;
+                if (!this.db || !this.user) {
+                    this.render();
+                    return;
+                }
 
+                // Strictly adhering to /artifacts/{appId}/public/data/{collectionName}
                 const publicDocRef = doc(this.db, 'artifacts', appId, 'public', 'data', 'app_state');
+                
                 onSnapshot(publicDocRef, (snapshot) => {
                     if (snapshot.exists()) {
                         const data = snapshot.data();
@@ -235,6 +254,7 @@
                         this.state.users = data.users || this.state.users;
                         this.state.measurements = data.measurements || [];
                         this.state.assignedWorkout = data.assignedWorkout || { date: '', exerciseIds: [], note: '' };
+                        this.saveLocalState();
                         this.render();
                     } else {
                         setDoc(publicDocRef, {
@@ -243,14 +263,18 @@
                             users: this.state.users,
                             measurements: [],
                             assignedWorkout: { date: '', exerciseIds: [], note: '' }
-                        }, { merge: true });
+                        }, { merge: true }).catch(err => console.warn("Initial doc set warning:", err));
+                        this.render();
                     }
-                }, (err) => console.error("Firestore sync error:", err));
+                }, (err) => {
+                    console.warn("Firestore sync warning:", err);
+                    this.render();
+                });
             }
 
             async syncToFirestore() {
+                this.saveLocalState();
                 if (!this.db || !this.user) {
-                    this.saveLocalState();
                     return;
                 }
                 const publicDocRef = doc(this.db, 'artifacts', appId, 'public', 'data', 'app_state');
@@ -263,20 +287,22 @@
                         assignedWorkout: this.state.assignedWorkout
                     }, { merge: true });
                 } catch(e) {
-                    console.error("Error saving data to cloud:", e);
+                    console.warn("Cloud sync warning (saved locally):", e);
                 }
             }
 
             toggleCoachMode() {
                 this.isCoachMode = !this.isCoachMode;
                 const btn = document.getElementById('coach-toggle-btn');
-                if (this.isCoachMode) {
-                    btn.classList.add('bg-amber-500', 'text-slate-900', 'font-bold');
-                    btn.classList.remove('bg-amber-500/20', 'text-amber-300');
-                    this.showModal('Coach Mode Active 👑', 'You can now push workouts, add custom exercises, and monitor group activity.');
-                } else {
-                    btn.classList.remove('bg-amber-500', 'text-slate-900', 'font-bold');
-                    btn.classList.add('bg-amber-500/20', 'text-amber-300');
+                if (btn) {
+                    if (this.isCoachMode) {
+                        btn.classList.add('bg-amber-500', 'text-slate-900', 'font-bold');
+                        btn.classList.remove('bg-amber-500/20', 'text-amber-300');
+                        this.showModal('Coach Mode Active 👑', 'You can now push workouts, add custom exercises, and monitor group activity.');
+                    } else {
+                        btn.classList.remove('bg-amber-500', 'text-slate-900', 'font-bold');
+                        btn.classList.add('bg-amber-500/20', 'text-amber-300');
+                    }
                 }
                 this.render();
             }
@@ -310,6 +336,7 @@
             showPinModal(targetUser) {
                 const modal = document.getElementById('modal-container');
                 const content = document.getElementById('modal-content');
+                if (!modal || !content) return;
                 content.innerHTML = `
                     <h3 class="text-lg font-bold text-white mb-1"><i class="fa-solid fa-lock text-pink-400 mr-2"></i>Enter Security PIN</h3>
                     <p class="text-slate-400 text-xs mb-4">Profile locked for <b>${targetUser.name}</b></p>
@@ -350,38 +377,44 @@
 
             login(userId) {
                 this.currentUser = this.state.users.find(u => u.id === userId);
-                document.getElementById('header-user-info').classList.remove('hidden');
-                document.getElementById('current-user-badge').innerText = this.currentUser.name;
+                const userInfoEl = document.getElementById('header-user-info');
+                const badgeEl = document.getElementById('current-user-badge');
+                if (userInfoEl) userInfoEl.classList.remove('hidden');
+                if (badgeEl && this.currentUser) badgeEl.innerText = this.currentUser.name;
                 this.navigate('dashboard');
             }
 
             logout() {
                 this.currentUser = null;
                 this.isCoachMode = false;
-                document.getElementById('header-user-info').classList.add('hidden');
-                document.getElementById('header-subtitle').innerText = 'Strength Tracker';
+                const userInfoEl = document.getElementById('header-user-info');
+                const subEl = document.getElementById('header-subtitle');
+                if (userInfoEl) userInfoEl.classList.add('hidden');
+                if (subEl) subEl.innerText = 'Strength Tracker';
                 this.navigate('welcome');
             }
 
             addNewUser(name, pin = '') {
-                if (!name.trim()) return;
-                const newId = name.toLowerCase().replace(/[^a-z0-9]/g, '_') + '_' + Math.floor(Math.random() * 1000);
-                const newUser = { id: newId, name: name.trim(), joined: new Date().toISOString().split('T')[0], pin: pin };
+                if (!name || !name.trim()) return;
+                const cleanName = name.trim();
+                const newId = cleanName.toLowerCase().replace(/[^a-z0-9]/g, '_') + '_' + Math.floor(Math.random() * 1000);
+                const newUser = { id: newId, name: cleanName, joined: new Date().toISOString().split('T')[0], pin: pin };
                 this.state.users.push(newUser);
                 this.syncToFirestore();
                 this.login(newId);
             }
 
             addNewExercise(name, category, trackType, unit) {
-                if (!name.trim()) return;
-                const newId = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+                if (!name || !name.trim()) return;
+                const cleanName = name.trim();
+                const newId = cleanName.toLowerCase().replace(/[^a-z0-9]/g, '_');
                 if (this.state.exercises.some(e => e.id === newId)) {
                     this.showModal('Notice', 'An exercise with this name already exists.');
                     return;
                 }
-                this.state.exercises.push({ id: newId, name: name.trim(), category: category, trackType: trackType, defaultUnit: unit });
+                this.state.exercises.push({ id: newId, name: cleanName, category: category, trackType: trackType, defaultUnit: unit });
                 this.syncToFirestore();
-                this.showModal('Exercise Added! 💪', `"${name.trim()}" is now available for everyone in the group.`);
+                this.showModal('Exercise Added! 💪', `"${cleanName}" is now available for everyone in the group.`);
                 this.navigate('dashboard');
             }
 
@@ -392,7 +425,6 @@
                 }
 
                 const userLogs = this.state.logs.filter(l => l.userId === this.currentUser.id && l.exerciseId === exerciseId);
-                const ex = this.state.exercises.find(e => e.id === exerciseId);
                 
                 const numWeight = weight ? parseFloat(weight) : 0;
                 const previousMaxWeight = userLogs.length > 0 ? Math.max(...userLogs.map(l => l.weight || 0)) : 0;
@@ -463,6 +495,7 @@
             showModal(title, message, autoClose = false) {
                 const modal = document.getElementById('modal-container');
                 const content = document.getElementById('modal-content');
+                if (!modal || !content) return;
                 content.innerHTML = `
                     <h3 class="text-lg font-bold text-white mb-2">${title}</h3>
                     <p class="text-slate-300 text-sm mb-6">${message}</p>
@@ -475,43 +508,53 @@
             }
 
             closeModal() {
-                document.getElementById('modal-container').classList.add('hidden');
+                const modal = document.getElementById('modal-container');
+                if (modal) modal.classList.add('hidden');
             }
 
             render() {
                 const container = document.getElementById('app-container');
+                if (!container) return;
                 
                 if (this.currentView === 'welcome') {
-                    document.getElementById('header-subtitle').innerText = 'Strength Tracker';
+                    const subEl = document.getElementById('header-subtitle');
+                    if (subEl) subEl.innerText = 'Strength Tracker';
                     container.innerHTML = this.renderWelcomeView();
                 } else if (this.currentView === 'dashboard') {
-                    document.getElementById('header-subtitle').innerText = 'Workout Hub';
+                    const subEl = document.getElementById('header-subtitle');
+                    if (subEl) subEl.innerText = 'Workout Hub';
                     container.innerHTML = this.renderDashboardView();
                 } else if (this.currentView === 'coach_push') {
-                    document.getElementById('header-subtitle').innerText = 'Coach Builder';
+                    const subEl = document.getElementById('header-subtitle');
+                    if (subEl) subEl.innerText = 'Coach Builder';
                     container.innerHTML = this.renderCoachPushView();
                 } else if (this.currentView === 'exercise_detail') {
-                    document.getElementById('header-subtitle').innerText = 'Progress Chart';
+                    const subEl = document.getElementById('header-subtitle');
+                    if (subEl) subEl.innerText = 'Progress Chart';
                     container.innerHTML = this.renderExerciseDetailView();
                     this.initChart();
                 } else if (this.currentView === 'measurements') {
-                    document.getElementById('header-subtitle').innerText = 'Body Progress';
+                    const subEl = document.getElementById('header-subtitle');
+                    if (subEl) subEl.innerText = 'Body Progress';
                     container.innerHTML = this.renderMeasurementsView();
                 } else if (this.currentView === 'add_exercise') {
-                    document.getElementById('header-subtitle').innerText = 'New Exercise';
+                    const subEl = document.getElementById('header-subtitle');
+                    if (subEl) subEl.innerText = 'New Exercise';
                     container.innerHTML = this.renderAddExerciseView();
                 } else if (this.currentView === 'security') {
-                    document.getElementById('header-subtitle').innerText = 'Profile Security';
+                    const subEl = document.getElementById('header-subtitle');
+                    if (subEl) subEl.innerText = 'Profile Security';
                     container.innerHTML = this.renderSecurityView();
                 } else if (this.currentView === 'group_summary') {
-                    document.getElementById('header-subtitle').innerText = 'Group Progress';
+                    const subEl = document.getElementById('header-subtitle');
+                    if (subEl) subEl.innerText = 'Group Progress';
                     container.innerHTML = this.renderGroupSummaryView();
                 }
             }
 
             renderWelcomeView() {
                 let usersHtml = this.state.users.map(u => `
-                    <button onclick="app.promptUserLogin('${u.id}')" class="w-full text-left bg-slate-800 hover:bg-slate-750 border border-slate-700/80 hover:border-pink-500/50 p-4 rounded-2xl flex items-center justify-between group transition-all shadow-sm hover:shadow-pink-500/10">
+                    <button onclick="app.promptUserLogin('${u.id}')" class="w-full text-left bg-slate-800 hover:bg-slate-755 border border-slate-700/80 hover:border-pink-500/50 p-4 rounded-2xl flex items-center justify-between group transition-all shadow-sm hover:shadow-pink-500/10">
                         <div class="flex items-center space-x-3">
                             <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-pink-500/20 to-purple-500/20 border border-pink-500/30 flex items-center justify-center text-pink-400 font-bold group-hover:scale-105 transition-transform">
                                 ${u.name.charAt(0)}
@@ -750,6 +793,9 @@
 
             renderExerciseDetailView() {
                 const ex = this.state.exercises.find(e => e.id === this.selectedExerciseId);
+                if (!ex) {
+                    return `<div class="p-6 text-center"><p class="text-slate-400 mb-4">Exercise not found.</p><button onclick="app.navigate('dashboard')" class="bg-pink-500 text-white px-4 py-2 rounded-xl text-sm">Back to Dashboard</button></div>`;
+                }
                 const userLogs = this.state.logs.filter(l => l.userId === this.currentUser.id && l.exerciseId === ex.id);
 
                 let historyHtml = userLogs.length === 0 ? 
@@ -798,16 +844,23 @@
 
             initChart() {
                 const ex = this.state.exercises.find(e => e.id === this.selectedExerciseId);
+                if (!ex) return;
                 const userLogs = this.state.logs
                     .filter(l => l.userId === this.currentUser.id && l.exerciseId === ex.id)
                     .sort((a, b) => new Date(a.date) - new Date(b.date));
 
-                const ctx = document.getElementById('progressChart').getContext('2d');
+                const canvasEl = document.getElementById('progressChart');
+                if (!canvasEl) return;
+                const ctx = canvasEl.getContext('2d');
                 
+                if (this._chartInstance) {
+                    this._chartInstance.destroy();
+                }
+
                 const labels = userLogs.map(l => l.date);
                 const data = userLogs.map(l => l.weight || parseFloat(l.performanceValue) || 0);
 
-                new Chart(ctx, {
+                this._chartInstance = new Chart(ctx, {
                     type: 'line',
                     data: {
                         labels: labels,
@@ -1036,3 +1089,17 @@
                                 </button>
                             </form>
                         </div>
+                    </div>
+                `;
+            }
+        }
+
+        // Initialize application properly on load
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => { window.app = new App(); });
+        } else {
+            window.app = new App();
+        }
+    </script>
+</body>
+</html>
