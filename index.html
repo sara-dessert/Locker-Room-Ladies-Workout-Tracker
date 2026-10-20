@@ -1,4 +1,4 @@
-f<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -6,9 +6,6 @@ f<!DOCTYPE html>
   <title>Locker Room Ladies Workout Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <!-- Firebase App & Firestore SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
   <style>
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -194,12 +191,12 @@ f<!DOCTYPE html>
         </div>
         
         <div id="coach-roster-list" class="space-y-2 text-xs">
-          <!-- Roster list with DELETE buttons populated dynamically -->
+          <!-- Roster list populated dynamically -->
         </div>
 
         <div class="pt-3 border-t border-slate-700">
           <button onclick="app.clearAllDemoData()" class="w-full bg-red-900/40 border border-red-500/40 text-red-300 hover:bg-red-900/60 font-semibold py-2 rounded-lg text-xs">
-            🗑️ Clear All Demo Profiles & Logs
+            🗑️ Reset & Reload All 80+ Exercises
           </button>
         </div>
       </div>
@@ -268,23 +265,92 @@ f<!DOCTYPE html>
 
   <!-- Application Logic -->
   <script>
-    // Initial Exercises Array
     const DEFAULT_EXERCISES = [
-      { id: 'ex_1', name: 'Barbell Back Squat', category: 'Lower Body', type: 'reps' },
-      { id: 'ex_2', name: 'Barbell Bench Press', category: 'Upper Body', type: 'reps' },
-      { id: 'ex_3', name: 'Conventional Deadlift', category: 'Lower Body', type: 'reps' },
-      { id: 'ex_4', name: 'Strict Shoulder Press', category: 'Upper Body', type: 'reps' },
-      { id: 'ex_5', name: 'Plank', category: 'Core', type: 'time' },
-      { id: 'ex_6', name: '1km Run', category: 'Cardio / Conditioning', type: 'time' },
-      { id: 'ex_7', name: 'Box Jump', category: 'Lower Body', type: 'reps' },
-      { id: 'ex_8', name: 'Concept2 Row / 1000m Row', category: 'Cardio / Conditioning', type: 'time' }
+      { id: 'ex_1', name: '1km Run', category: 'Cardio / Conditioning', type: 'time' },
+      { id: 'ex_2', name: 'AbMat Sit-Up', category: 'Core', type: 'reps' },
+      { id: 'ex_3', name: 'Air Bike (Assault/Echo Bike)', category: 'Cardio / Conditioning', type: 'time' },
+      { id: 'ex_4', name: 'Arnold Press', category: 'Upper Body', type: 'reps' },
+      { id: 'ex_5', name: 'Back Squat', category: 'Lower Body', type: 'reps' },
+      { id: 'ex_6', name: 'Bar Muscle-Up', category: 'Upper Body', type: 'reps' },
+      { id: 'ex_7', name: 'Barbell Bench Press', category: 'Upper Body', type: 'reps' },
+      { id: 'ex_8', name: 'Barbell Bent-Over Row', category: 'Upper Body', type: 'reps' },
+      { id: 'ex_9', name: 'Barbell Hip Thrust', category: 'Lower Body', type: 'reps' },
+      { id: 'ex_10', name: 'Box Jump', category: 'Lower Body', type: 'reps' },
+      { id: 'ex_11', name: 'Box Jump-Over', category: 'Lower Body', type: 'reps' },
+      { id: 'ex_12', name: 'Box Squat', category: 'Lower Body', type: 'reps' },
+      { id: 'ex_13', name: 'Box Step-Up (Weighted or Bodyweight)', category: 'Lower Body', type: 'reps' },
+      { id: 'ex_14', name: 'Bulgarian Split Squat', category: 'Lower Body', type: 'reps' },
+      { id: 'ex_15', name: 'Burpee Broad Jump', category: 'Cardio / Conditioning', type: 'reps' },
+      { id: 'ex_16', name: 'Chest-to-Bar Pull-Up (C2B)', category: 'Upper Body', type: 'reps' },
+      { id: 'ex_17', name: 'Chest-to-Floor Burpee', category: 'Cardio / Conditioning', type: 'reps' },
+      { id: 'ex_18', name: 'Chin-Up', category: 'Upper Body', type: 'reps' },
+      { id: 'ex_19', name: 'Clean & Press (Barbell/DB/KB)', category: 'Full Body', type: 'reps' },
+      { id: 'ex_20', name: 'Concept2 BikeErg', category: 'Cardio / Conditioning', type: 'time' },
+      { id: 'ex_21', name: 'Concept2 Row / 1000m Row', category: 'Cardio / Conditioning', type: 'time' },
+      { id: 'ex_22', name: 'Concept2 SkiErg / 1000m SkiErg', category: 'Cardio / Conditioning', type: 'time' },
+      { id: 'ex_23', name: 'Conventional Deadlift', category: 'Lower Body', type: 'reps' },
+      { id: 'ex_24', name: 'Curved Manual Treadmill', category: 'Cardio / Conditioning', type: 'time' },
+      { id: 'ex_25', name: 'DB/KB Bench Press', category: 'Upper Body', type: 'reps' },
+      { id: 'ex_26', name: 'DB/KB Floor Press', category: 'Upper Body', type: 'reps' },
+      { id: 'ex_27', name: 'Deficit Push-Up', category: 'Upper Body', type: 'reps' },
+      { id: 'ex_28', name: "Devil's Press (DB)", category: 'Full Body', type: 'reps' },
+      { id: 'ex_29', name: 'Double Under (Jump Rope)', category: 'Cardio / Conditioning', type: 'reps' },
+      { id: 'ex_30', name: "Farmer's Carry (Dual DB/KB)", category: 'Full Body', type: 'time' },
+      { id: 'ex_31', name: 'Front Rack Carry (Dual or Single DB/KB)', category: 'Full Body', type: 'time' },
+      { id: 'ex_32', name: 'Front Squat', category: 'Lower Body', type: 'reps' },
+      { id: 'ex_33', name: 'Glute Bridge', category: 'Lower Body', type: 'reps' },
+      { id: 'ex_34', name: 'Goblet Squat (DB/KB)', category: 'Lower Body', type: 'reps' },
+      { id: 'ex_35', name: 'Good Morning', category: 'Lower Body', type: 'reps' },
+      { id: 'ex_36', name: 'Hand-Release Push-Up', category: 'Upper Body', type: 'reps' },
+      { id: 'ex_37', name: 'Handstand Push-Up (HSPU)', category: 'Upper Body', type: 'reps' },
+      { id: 'ex_38', name: 'Hang Clean', category: 'Full Body', type: 'reps' },
+      { id: 'ex_39', name: 'Hang Snatch', category: 'Full Body', type: 'reps' },
+      { id: 'ex_40', name: 'Incline Bench Press', category: 'Upper Body', type: 'reps' },
+      { id: 'ex_41', name: 'Inverted Row', category: 'Upper Body', type: 'reps' },
+      { id: 'ex_42', name: 'Jump Rope (Single Under)', category: 'Cardio / Conditioning', type: 'reps' },
+      { id: 'ex_43', name: 'Kipping / Butterfly Pull-Up', category: 'Upper Body', type: 'reps' },
+      { id: 'ex_44', name: 'Knees-to-Elbows', category: 'Core', type: 'reps' },
+      { id: 'ex_45', name: 'Lat Pulldown', category: 'Upper Body', type: 'reps' },
+      { id: 'ex_46', name: 'Medicine Ball Slam', category: 'Full Body', type: 'reps' },
+      { id: 'ex_47', name: 'Overhead Carry (Dual or Single DB/KB)', category: 'Full Body', type: 'time' },
+      { id: 'ex_48', name: 'Overhead Squat', category: 'Lower Body', type: 'reps' },
+      { id: 'ex_49', name: 'Pendlay Row', category: 'Upper Body', type: 'reps' },
+      { id: 'ex_50', name: 'Plank', category: 'Core', type: 'time' },
+      { id: 'ex_51', name: 'Power Clean (Barbell/DB/KB/Sandbag)', category: 'Full Body', type: 'reps' },
+      { id: 'ex_52', name: 'Power Snatch (Barbell/DB/KB)', category: 'Full Body', type: 'reps' },
+      { id: 'ex_53', name: 'Push Jerk / Split Jerk', category: 'Upper Body', type: 'reps' },
+      { id: 'ex_54', name: 'Push Press (Barbell/DB/KB)', category: 'Upper Body', type: 'reps' },
+      { id: 'ex_55', name: 'Renegade Row (DB/KB)', category: 'Upper Body', type: 'reps' },
+      { id: 'ex_56', name: 'Reverse Lunge (Barbell/DB/KB/Sandbag)', category: 'Lower Body', type: 'reps' },
+      { id: 'ex_57', name: 'Ring Muscle-Up', category: 'Upper Body', type: 'reps' },
+      { id: 'ex_58', name: 'Ring Row', category: 'Upper Body', type: 'reps' },
+      { id: 'ex_59', name: 'Romanian Deadlift / RDL (Barbell/DB/KB)', category: 'Lower Body', type: 'reps' },
+      { id: 'ex_60', name: 'Russian Twist (Weighted)', category: 'Core', type: 'reps' },
+      { id: 'ex_61', name: 'Sandbag Clean', category: 'Full Body', type: 'reps' },
+      { id: 'ex_62', name: 'Sandbag Over-the-Shoulder Toss', category: 'Full Body', type: 'reps' },
+      { id: 'ex_63', name: 'Sandbag Walking Lunge', category: 'Lower Body', type: 'reps' },
+      { id: 'ex_64', name: 'Single-Arm Row (DB/KB)', category: 'Upper Body', type: 'reps' },
+      { id: 'ex_65', name: 'Sled Pull', category: 'Full Body', type: 'time' },
+      { id: 'ex_66', name: 'Sled Push', category: 'Full Body', type: 'time' },
+      { id: 'ex_67', name: 'Squat Clean', category: 'Full Body', type: 'reps' },
+      { id: 'ex_68', name: 'Squat Snatch', category: 'Full Body', type: 'reps' },
+      { id: 'ex_69', name: 'Standard Push-Up', category: 'Upper Body', type: 'reps' },
+      { id: 'ex_70', name: 'Stiff-Legged Deadlift', category: 'Lower Body', type: 'reps' },
+      { id: 'ex_71', name: 'Strict Pull-Up', category: 'Upper Body', type: 'reps' },
+      { id: 'ex_72', name: 'Strict Shoulder Press (Barbell/DB/KB)', category: 'Upper Body', type: 'reps' },
+      { id: 'ex_73', name: 'Suitcase Carry (Single DB/KB)', category: 'Full Body', type: 'time' },
+      { id: 'ex_74', name: 'Sumo Deadlift', category: 'Lower Body', type: 'reps' },
+      { id: 'ex_75', name: 'Sumo Deadlift High Pull / SDHP (Barbell/KB)', category: 'Full Body', type: 'reps' },
+      { id: 'ex_76', name: 'Swing (DB/KB - Russian & American)', category: 'Full Body', type: 'reps' },
+      { id: 'ex_77', name: 'Thruster (Barbell/DB/KB)', category: 'Full Body', type: 'reps' },
+      { id: 'ex_78', name: 'Toes-to-Bar (T2B)', category: 'Core', type: 'reps' },
+      { id: 'ex_79', name: 'Turkish Get-Up (DB/KB)', category: 'Full Body', type: 'reps' },
+      { id: 'ex_80', name: 'V-Ups', category: 'Core', type: 'reps' },
+      { id: 'ex_81', name: 'Walking Lunge (Barbell/DB/KB)', category: 'Lower Body', type: 'reps' },
+      { id: 'ex_82', name: 'Wall Balls', category: 'Full Body', type: 'reps' }
     ];
 
-    const DEFAULT_USERS = [
-      { id: 'u_1', name: 'Sarah', pin: '' },
-      { id: 'u_2', name: 'Jessica', pin: '' },
-      { id: 'u_3', name: 'Ashley', pin: '' }
-    ];
+    const DEFAULT_USERS = [];
 
     class App {
       constructor() {
@@ -302,7 +368,7 @@ f<!DOCTYPE html>
         if (!localStorage.getItem('lrl_users')) {
           localStorage.setItem('lrl_users', JSON.stringify(DEFAULT_USERS));
         }
-        if (!localStorage.getItem('lrl_exercises')) {
+        if (!localStorage.getItem('lrl_exercises') || JSON.parse(localStorage.getItem('lrl_exercises')).length < 10) {
           localStorage.setItem('lrl_exercises', JSON.stringify(DEFAULT_EXERCISES));
         }
         if (!localStorage.getItem('lrl_logs')) {
@@ -403,11 +469,11 @@ f<!DOCTYPE html>
         const coachWorkout = this.getCoachWorkout();
         const highlightedIds = coachWorkout ? (coachWorkout.exerciseIds || []) : [];
 
-        // Sort highlighted exercises to top
         const sorted = [...exercises].sort((a, b) => {
           const aHigh = highlightedIds.includes(a.id) ? 1 : 0;
           const bHigh = highlightedIds.includes(b.id) ? 1 : 0;
-          return bHigh - aHigh;
+          if (bHigh !== aHigh) return bHigh - aHigh;
+          return a.name.localeCompare(b.name);
         });
 
         const container = document.getElementById('exercise-list-container');
@@ -492,12 +558,10 @@ f<!DOCTYPE html>
       renderExerciseDetailChartAndLogs() {
         const logs = this.getLogs().filter(l => l.userId === this.currentUser.id && l.exerciseId === this.activeExercise.id);
         
-        // Find PR
         const weights = logs.map(l => l.weight);
         const maxWeight = weights.length ? Math.max(...weights) : 0;
         document.getElementById('detail-exercise-pr').innerText = `PR: ${maxWeight} lbs`;
 
-        // Render History List
         const listContainer = document.getElementById('exercise-history-list');
         listContainer.innerHTML = logs.length ? '' : '<p class="text-slate-500 italic">No logs recorded for this exercise yet.</p>';
         
@@ -510,7 +574,6 @@ f<!DOCTYPE html>
           `;
         });
 
-        // Render Chart
         const ctx = document.getElementById('progressChart').getContext('2d');
         if (this.chartInstance) this.chartInstance.destroy();
 
@@ -564,7 +627,6 @@ f<!DOCTYPE html>
         this.hideAllViews();
         document.getElementById('view-coach').classList.remove('hidden');
 
-        // Populate Exercise Checkboxes
         const exercises = this.getExercises();
         const selector = document.getElementById('coach-exercise-selector');
         selector.innerHTML = '';
@@ -577,7 +639,6 @@ f<!DOCTYPE html>
           `;
         });
 
-        // Populate Roster with DELETE buttons
         this.renderCoachRoster();
       }
 
@@ -585,6 +646,11 @@ f<!DOCTYPE html>
         const users = this.getUsers();
         const rosterContainer = document.getElementById('coach-roster-list');
         rosterContainer.innerHTML = '';
+
+        if (!users.length) {
+          rosterContainer.innerHTML = '<p class="text-slate-400 italic">No profiles created yet. Click "+ Add Member" above.</p>';
+          return;
+        }
 
         users.forEach(u => {
           rosterContainer.innerHTML += `
@@ -602,21 +668,17 @@ f<!DOCTYPE html>
       }
 
       deleteUser(userId, userName) {
-        if (!confirm(`Are you sure you want to delete ${userName}'s profile and remove them from the roster?`)) return;
+        if (!confirm(`Are you sure you want to delete ${userName}'s profile?`)) return;
 
-        // Delete user
         const users = this.getUsers().filter(u => u.id !== userId);
         localStorage.setItem('lrl_users', JSON.stringify(users));
 
-        // Delete logs for that user
         const logs = this.getLogs().filter(l => l.userId !== userId);
         localStorage.setItem('lrl_logs', JSON.stringify(logs));
 
-        // Refresh lists and dropdowns
         this.renderCoachRoster();
         this.renderUserDropdown();
 
-        // If active user was deleted, reset
         if (this.currentUser && this.currentUser.id === userId) {
           this.switchUser();
         }
@@ -625,16 +687,13 @@ f<!DOCTYPE html>
       }
 
       clearAllDemoData() {
-        if (!confirm('This will wipe out all profiles and logs so you can start with a clean slate. Continue?')) return;
+        if (!confirm('This will reload all 80+ default exercises into your app. Continue?')) return;
 
-        localStorage.removeItem('lrl_users');
-        localStorage.removeItem('lrl_logs');
-        localStorage.removeItem('lrl_metrics');
+        localStorage.setItem('lrl_exercises', JSON.stringify(DEFAULT_EXERCISES));
         
-        this.initStorage();
         this.renderUserDropdown();
         this.switchUser();
-        alert('All demo data cleared!');
+        alert('All 82 exercises loaded successfully!');
       }
 
       publishCoachWorkout() {
@@ -785,7 +844,6 @@ f<!DOCTYPE html>
       }
     }
 
-    // Launch App
     let app;
     document.addEventListener('DOMContentLoaded', () => {
       app = new App();
